@@ -7,4 +7,25 @@ services:
       - 3000:3000
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/chatbot_db?schema=public
+    depends_on:
+      - postgres
     restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: chatbot_db
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  
