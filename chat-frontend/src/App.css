@@ -1,0 +1,286 @@
+/* Importation des typographies officielles La Transju' (Page 21 de la charte) */
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@800&family=Roboto:ital,wght@0,400;0,700;1,400&display=swap');
+
+body {
+  background-color: #F1F1F1; /* "Cultured 2" - Page 15 */
+  font-family: 'Roboto', sans-serif; /* Typographie texte de labeur - Page 21 */
+  color: #110856; /* "Midnight Blue" */
+  margin: 0;
+  padding: 0;
+}
+
+/* Conteneur principal */
+.chat-container {
+  max-width: 750px;
+  height: 85vh;
+  margin: 4vh auto;
+  display: flex;
+  flex-direction: column;
+  background-color: #FAFAFA; /* "Cultured 3" - Page 15 */
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(17, 8, 86, 0.15);
+  overflow: hidden;
+  border: 1px solid #D0D0D0; /* "Cultured" */
+}
+
+/* En-tête Midnight Blue */
+.chat-header {
+  padding: 20px 24px;
+  background-color: #110856; /* "Midnight Blue" officiel - Page 15 */
+  color: #FAFAFA;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 4px solid #EA0066; /* Touche de "Razzmatazz" dynamisante - Page 15 */
+}
+
+.chat-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-logo {
+  height: 45px;
+  width: auto;
+  object-fit: contain;
+}
+
+.chat-header h1 {
+  font-family: 'Raleway-Extra-Bold', sans-serif;
+  color: white;
+  font-weight: 800;
+  font-size: 1.3rem;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Badge Session */
+.session-badge {
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #FAFAFA;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Zone d'affichage des messages */
+.chat-messages {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #FAFAFA; /* "Cultured 3" */
+}
+
+.welcome-message {
+  text-align: center;
+  color: #110856;
+  margin: auto;
+  font-size: 0.95rem;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px dashed #D0D0D0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Style des bulles de discussion */
+.message {
+  max-width: 80%;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Message Utilisateur (Midnight Blue) */
+.message.utilisateur {
+  align-self: flex-end;
+  background-color: #110856; /* "Midnight Blue" */
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
+}
+
+.message.utilisateur p {
+  margin: 0;
+}
+
+/* Message IA (Fond blanc et texte structuré) */
+.message.ai {
+  align-self: flex-start;
+  background-color: #ffffff;
+  color: #110856;
+  border: 1px solid #D0D0D0;
+  border-bottom-left-radius: 2px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.message.ai p {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.message.ai p:last-child {
+  margin-bottom: 0;
+}
+
+.message.loading {
+  color: #110856;
+  font-style: italic;
+  background-color: #ffffff;
+  border: 1px dashed #D0D0D0;
+}
+
+/* Formulaire de saisie */
+.chat-form {
+  display: flex;
+  padding: 16px 20px;
+  background-color: #ffffff;
+  border-top: 1px solid #D0D0D0;
+  gap: 12px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #D0D0D0;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: 'Roboto', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+  background-color: #F1F1F1; /* "Cultured 2" */
+}
+
+.chat-input:focus {
+  border-color: #110856;
+  background-color: #ffffff;
+}
+
+/* Bouton d'action principal (Razzmatazz - 10% de couleur d'appel selon p.17) */
+.chat-button {
+  padding: 0 24px;
+  background-color: #EA0066; /* "Razzmatazz" - Page 15 */
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Raleway', sans-serif; /* Typographie bouton */
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.chat-button:hover:not(:disabled) {
+  background-color: #C80056;
+  transform: translateY(-1px);
+}
+
+.chat-button:disabled {
+  background-color: #D0D0D0;
+  cursor: not-allowed;
+}
+
+/* Icone widget */
+/* Wrapper global ancré en bas à droite */
+.widget-wrapper {
+  position: fixed;
+  bottom: 20px;
+  right: 20px; /* 👈 Positionné à droite */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* 👈 Aligné à droite */
+}
+
+/* Pastille déclencheuse (Midnight Blue + Razzmatazz au hover) */
+.chat-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #110856;
+  color: #FAFAFA;
+  border: 2px solid #EA0066;
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(17, 8, 86, 0.3);
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.chat-trigger-btn:hover {
+  transform: scale(1.05);
+  background-color: #EA0066;
+}
+
+.trigger-logo {
+  height: 24px;
+  width: auto;
+}
+
+/* Redimensionnement du container pour le mode Floating Widget */
+.chat-container {
+  width: 380px;
+  height: 520px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  background-color: #FAFAFA;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  border: 1px solid #D0D0D0;
+  animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.icon-btn:hover {
+  opacity: 1;
+}

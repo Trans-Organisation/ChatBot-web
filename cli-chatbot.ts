@@ -7,7 +7,7 @@ const rl = readline.createInterface({
 
 // Génération d'un sessionId unique pour cette session de terminal
 const sessionId = `cli_session_${Date.now()}`;
-const API_URL = 'http://localhost:3001/chat';
+const API_URL = 'http://localhost:3000/chat';
 
 console.log('🤖 Bienvenue dans le Chatbot CLI ! (Tapez "exit" pour quitter)');
 console.log(`📌 Session ID actuel : ${sessionId}\n`);
@@ -43,7 +43,7 @@ const askQuestion = () => {
       const data = (await response.json()) as { reply: string };
       console.log(`\n🤖 Mistral : ${data.reply}`);
     } catch (error) {
-      console.error('❌ Erreur de communication avec le serveur (Vérifiez que NestJS tourne sur le port 3001) :', error);
+      console.error('❌ Erreur de communication avec le serveur (Vérifiez que NestJS tourne sur le port 3000) :', error);
     }
 
     // On relance la question pour continuer la conversation

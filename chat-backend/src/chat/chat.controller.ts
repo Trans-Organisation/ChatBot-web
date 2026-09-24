@@ -3,10 +3,11 @@ import { ChatService } from './chat.service.js';
 
 @Controller('chat')
 export class ChatController {
-    constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) {}
 
-    @Post()
-    async sendMessage(@Body() body: { content: string; sessionId: string }) {
-        return this.chatService.HandleMessage(body.sessionId, body.content);
-    }
+  @Post()
+  async handleChat(@Body() body: { sessionId: string; content: string }) {
+    // 💡 'handleMessage' en minuscules
+    return this.chatService.handleMessage(body.sessionId, body.content);
+  }
 }

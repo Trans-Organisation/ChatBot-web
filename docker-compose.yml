@@ -1,10 +1,26 @@
-version: '3.8'
-
 services:
+  # 1. Base de données PostgreSQL
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: chatbot_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - chatbot-net
+
+  # 2. Backend NestJS
   chat-backend:
     build: ./chat-backend
+    container_name: chat-backend-1
     ports:
-      - 3000:3000
+      - "3000:3000" 
     env_file:
       - .env
     environment:
@@ -12,20 +28,25 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+    networks:
+      - chatbot-net
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: postgres_db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: chatbot_db
+  # 3. Frontend React (Vite)
+  frontend:
+    build: ./chat-frontend
+    container_name: chat-frontend-1
     ports:
-      - 5432:5432
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "5173:5173"
+    depends_on:
+      - chat-backend
     restart: unless-stopped
+    networks:
+      - chatbot-net
 
 volumes:
   postgres_data:
+
+networks:
+  chatbot-net:
+    driver: bridge
   
