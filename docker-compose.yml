@@ -24,6 +24,7 @@ services:
     env_file:
       - .env
     environment:
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/chatbot_db?schema=public
     depends_on:
       - postgres

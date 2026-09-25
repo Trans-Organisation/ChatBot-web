@@ -161,6 +161,7 @@ body {
 
 .chat-input {
   flex: 1;
+  min-width: 0;
   padding: 12px 16px;
   border: 1px solid #D0D0D0;
   border-radius: 6px;
@@ -188,6 +189,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color 0.2s, transform 0.1s;
 }
 
@@ -283,4 +285,57 @@ body {
 
 .icon-btn:hover {
   opacity: 1;
+}
+
+/* responcivité */
+@media screen and (max-width: 480px) {
+  .widget-wrapper {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    align-items: stretch;
+  }
+
+  .chat-container {
+    width: 100% !important;
+    height: 75vh !important;
+    max-height: 480px;
+    margin-bottom: 10px;
+  }
+
+  /* Réduction des marges du formulaire sur mobile pour gagner de la place */
+  .chat-form {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .chat-input {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  /* Bouton envoyer compacté pour éviter qu'il ne saute ou ne dépasse */
+  .chat-button {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+
+  .chat-trigger-btn {
+    align-self: flex-end;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(17, 8, 86, 0.4);
+  }
+
+  .chat-trigger-btn span {
+    display: none;
+  }
+
+  .trigger-logo {
+    height: 26px;
+    width: auto;
+  }
 }

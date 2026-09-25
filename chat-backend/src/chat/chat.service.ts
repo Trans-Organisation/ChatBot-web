@@ -34,17 +34,18 @@ export class ChatService {
 
     try {
       const relevantChunks = await this.vectorService.searchSimilarChunks(content, 3);
-      // 💡 Typer chunk résout l'erreur TS7006
       const contextText = relevantChunks.map((chunk: { content: string }) => chunk.content).join('\n---\n');
 
+      // 🔒 Prompt strict pour interdire toute hallucination
       const systemPrompt = {
         role: 'system' as const,
         content: `Tu es l'assistant officiel de l'événement sportif La Transju'. 
-Sois accueillant, précis et dynamique.
-Utilise prioritairement les informations suivantes pour répondre à la question de l'utilisateur :
-${contextText ? contextText : 'Aucune information spécifique disponible dans la base de connaissances.'}
+RÈGLE ABSOLUE : Tu dois répondre STRICTEMENT et UNIQUEMENT à partir des extraits de documents officiels fournis dans le contexte ci-dessous. 
+Si la réponse ne se trouve pas explicitement dans ce contexte, réponds textuellement que tu ne possèdes pas l'information dans les documents officiels et invite l'utilisateur à consulter le site de l'événement. 
+N'utilise JAMAIS tes connaissances générales, n'invente jamais de faits, de lieux, de parcours ou de chiffres.
 
-Si la réponse ne se trouve pas dans le texte fourni, réponds avec tes connaissances générales sur La Transju' en le précisant gentiment.`,
+Contexte officiel :
+${contextText ? contextText : 'Aucune information spécifique disponible dans la base de connaissances.'}`,
       };
 
       const dbMessages = await this.prisma.message.findMany({
@@ -59,10 +60,10 @@ Si la réponse ne se trouve pas dans le texte fourni, réponds avec tes connaiss
 
       const response = await this.mistral.chat.complete({
         model: 'mistral-small-latest',
+        temperature: 0.0, // 👈 0.0 pour empêcher l'IA d'improviser ou de deviner
         messages: [systemPrompt, ...formattedHistory],
       });
 
-      // 💡 Chaining optionnel pour éviter TS2532 (Object is possibly 'undefined')
       if (response.choices && response.choices.length > 0) {
         const messageContent = response.choices[0]?.message?.content;
         if (typeof messageContent === 'string') {
