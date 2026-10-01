@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
+import transJuLogo from './assets/transJu-logo.png';
 
 interface Message {
   sender: 'utilisateur' | 'ai';
@@ -89,7 +90,7 @@ function App() {
         <div className={`chat-container ${isExpanded ? 'expanded' : ''}`}>
           <header className="chat-header">
             <div className="chat-header-title">
-              <img src="/transJu-logo.png" alt="Logo Transju" className="header-logo" />
+              <img src={transJuLogo} alt="Logo Transju" className="header-logo" />
               <h1>Assistant Transju</h1>
             </div>
             <div className="header-actions">
@@ -155,7 +156,7 @@ function App() {
       )}
 
       <button className="chat-trigger-btn" onClick={() => setIsOpen(!isOpen)}>
-        <img src="/transJu-logo.png" alt="Logo Transju" className="trigger-logo" />
+        <img src={transJuLogo} alt="Logo Transju" className="trigger-logo" />
         <span>Besoin d'aide ?</span>
       </button>
     </div>
