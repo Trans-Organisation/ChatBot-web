@@ -7,12 +7,22 @@ interface Message {
   content: string;
 }
 
+const QUICK_REPLIES = [
+  "Quel est le matériel obligatoire ?",
+  "Retrait des dossards : où et quand ?",
+  "Quelles sont les dates des épreuves ?",
+  "Quels sont les parcours proposés ?",
+  "Infos sur La Transju' Cyclo",
+  "Infos sur La Transju' Ski"
+];
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,27 +47,24 @@ function App() {
     setMessages([]);
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
+  const sendPromptMessage = async (textToSend: string) => {
+    const trimmedMessage = textToSend.trim();
+    if (!trimmedMessage || loading) return;
 
-    const userMessage = input.trim();
     setInput('');
-
-    setMessages((prev) => [...prev, { sender: 'utilisateur', content: userMessage }]);
+    setMessages((prev) => [...prev, { sender: 'utilisateur', content: trimmedMessage }]);
     setLoading(true);
 
     try {
       const response = await fetch('http://localhost:3000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMessage, sessionId }),
+        body: JSON.stringify({ content: trimmedMessage, sessionId }),
       });
 
       if (!response.ok) throw new Error('Erreur de communication avec le serveur');
 
       const data = await response.json();
-
       setMessages((prev) => [...prev, { sender: 'ai', content: data.reply }]);
     } catch (error) {
       console.error(error);
@@ -70,16 +77,28 @@ function App() {
     }
   };
 
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    sendPromptMessage(input);
+  };
+
   return (
     <div className="widget-wrapper">
       {isOpen && (
-        <div className="chat-container">
+        <div className={`chat-container ${isExpanded ? 'expanded' : ''}`}>
           <header className="chat-header">
             <div className="chat-header-title">
               <img src="/transJu-logo.png" alt="Logo Transju" className="header-logo" />
               <h1>Assistant Transju</h1>
             </div>
             <div className="header-actions">
+              <button 
+                onClick={() => setIsExpanded(!isExpanded)} 
+                className="icon-btn" 
+                title={isExpanded ? "Réduire la fenêtre" : "Agrandir la fenêtre"}
+              >
+                {isExpanded ? '🗗' : '🗖'}
+              </button>
               <button onClick={startNewSession} className="icon-btn" title="Nouvelle session">
                 🔄
               </button>
@@ -91,10 +110,10 @@ function App() {
 
           <div className="chat-messages">
             {messages.length === 0 && (
-              <p className="welcome-message">
-                **Bienvenue sur l'Assistant La Transju !**<br />
-                Posez-moi vos questions sur les épreuves, les parcours ou votre préparation.
-              </p>
+              <div className="welcome-message">
+                <strong>Bienvenue sur l'Assistant La Transju' !</strong><br />
+                Posez vos questions ou choisissez une question fréquente ci-dessous.
+              </div>
             )}
             {messages.map((msg, index) => (
               <div key={index} className={`message ${msg.sender}`}>
@@ -103,6 +122,20 @@ function App() {
             ))}
             {loading && <div className="message ai loading">L'assistant recherche les infos...</div>}
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Bandeau déroulant horizontal au-dessus de la saisie */}
+          <div className="quick-replies-bar">
+            {QUICK_REPLIES.map((question, index) => (
+              <button
+                key={index}
+                onClick={() => sendPromptMessage(question)}
+                className="quick-reply-chip"
+                disabled={loading}
+              >
+                {question}
+              </button>
+            ))}
           </div>
 
           <form onSubmit={sendMessage} className="chat-form">

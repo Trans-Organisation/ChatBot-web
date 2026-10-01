@@ -78,16 +78,75 @@ body {
   background-color: #FAFAFA; /* "Cultured 3" */
 }
 
+.welcome-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: auto 0;
+  animation: fadeIn 0.3s ease-out;
+}
+
 .welcome-message {
   text-align: center;
   color: #110856;
-  margin: auto;
+  margin: 0;
   font-size: 0.95rem;
   background: #ffffff;
-  padding: 20px;
+  padding: 16px;
   border-radius: 8px;
   border: 1px dashed #D0D0D0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  line-height: 1.4;
+}
+
+/* Zone des questions fréquentes (Quick Replies) */
+.quick-replies-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-replies-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #110856;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+.quick-replies-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-reply-btn {
+  background-color: #ffffff;
+  color: #110856;
+  border: 1px solid #110856;
+  border-radius: 20px;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  font-family: 'Roboto', sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 5px rgba(17, 8, 86, 0.05);
+}
+
+.quick-reply-btn:hover:not(:disabled) {
+  background-color: #110856;
+  color: #ffffff;
+  border-color: #EA0066;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(17, 8, 86, 0.15);
+}
+
+.quick-reply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Style des bulles de discussion */
@@ -244,8 +303,8 @@ body {
 
 /* Redimensionnement du container pour le mode Floating Widget */
 .chat-container {
-  width: 380px;
-  height: 520px;
+  width: 400px;
+  height: 560px;
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
@@ -255,6 +314,64 @@ body {
   overflow: hidden;
   border: 1px solid #D0D0D0;
   animation: slideUp 0.25s ease-out;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mode étendu / grand écran */
+.chat-container.expanded {
+  width: 680px;
+  height: 80vh;
+  max-width: 90vw;
+  max-height: 820px;
+}
+
+/* Bandeau déroulant horizontal au-dessus de la saisie */
+.quick-replies-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: #F3F4F6;
+  border-top: 1px solid #E5E7EB;
+  overflow-x: auto;
+  white-space: nowrap;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.quick-replies-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.quick-replies-bar::-webkit-scrollbar-thumb {
+  background: #D0D0D0;
+  border-radius: 4px;
+}
+
+.quick-reply-chip {
+  flex: 0 0 auto;
+  background-color: #ffffff;
+  color: #110856;
+  border: 1px solid #110856;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-family: 'Roboto', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 1px 3px rgba(17, 8, 86, 0.08);
+}
+
+.quick-reply-chip:hover:not(:disabled) {
+  background-color: #110856;
+  color: #ffffff;
+  border-color: #EA0066;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(17, 8, 86, 0.15);
+}
+
+.quick-reply-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @keyframes slideUp {

@@ -1,79 +1,112 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { Mistral } from '@mistralai/mistralai';
+import pdf from 'pdf-parse';
 import { PrismaService } from './prisma/prisma.service.js';
 import { VectorService } from './vector/vector.service.js';
 
-async function runOcrIngestion() {
-  console.log('📄 Recherche et lecture du fichier PDF...');
+/**
+ * Découpe un texte long en blocs (chunks) intelligents avec chevauchement (overlap).
+ * Découpe en priorité par paragraphes (\n\n), puis par phrases si un paragraphe est trop long.
+ */
+function splitTextIntoChunks(text: string, maxChunkSize = 1200, overlap = 200): string[] {
+  const paragraphs = text.split(/\n\s*\n/);
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  for (const paragraph of paragraphs) {
+    const cleanedPara = paragraph.trim();
+    if (!cleanedPara) continue;
+
+    // Si l'ajout du paragraphe dépasse la taille max du chunk
+    if ((currentChunk + '\n\n' + cleanedPara).length > maxChunkSize) {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
+
+      // Si un paragraphe dépasse à lui seul la taille max, on le découpe par phrase
+      if (cleanedPara.length > maxChunkSize) {
+        const sentences = cleanedPara.split(/(?<=[.!?])\s+/);
+        currentChunk = '';
+        for (const sentence of sentences) {
+          if ((currentChunk + ' ' + sentence).length > maxChunkSize) {
+            if (currentChunk.trim()) chunks.push(currentChunk.trim());
+            const overlapText = currentChunk.slice(-overlap);
+            currentChunk = overlapText + ' ' + sentence;
+          } else {
+            currentChunk += (currentChunk ? ' ' : '') + sentence;
+          }
+        }
+      } else {
+        // Conservation de la fin du chunk précédent pour le chevauchement (overlap)
+        const overlapText = currentChunk.slice(-overlap);
+        currentChunk = overlapText + '\n\n' + cleanedPara;
+      }
+    } else {
+      currentChunk += (currentChunk ? '\n\n' : '') + cleanedPara;
+    }
+  }
+
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
+}
+
+async function runPdfIngestion() {
+  console.log('📄 Lecture du fichier PDF local avec pdf-parse...');
   
-  const filePath = path.resolve('data/trail/reglement-trail-2027.pdf');
+  let filePath = path.resolve('data/trail/reglement-trail-2027.pdf');
+  if (!fs.existsSync(filePath)) {
+    filePath = path.resolve('chat-backend/data/trail/reglement-trail-2027.pdf');
+  }
   if (!fs.existsSync(filePath)) {
     console.error(`❌ Fichier introuvable à l'emplacement : ${filePath}`);
     return;
   }
 
-  // 1. Conversion du PDF local en Base64 Data URI pour Mistral OCR
-  const fileBuffer = fs.readFileSync(filePath);
-  const base64Pdf = fileBuffer.toString('base64');
-  const dataUri = `data:application/pdf;base64,${base64Pdf}`;
+  // 1. Lecture du buffer du fichier PDF
+  const dataBuffer = fs.readFileSync(filePath);
 
-  const apiKey = process.env.MISTRAL_API_KEY;
-  if (!apiKey) {
-    throw new Error('MISTRAL_API_KEY is not defined.');
+  // 2. Extraction du texte brut avec pdf-parse
+  const pdfData = await pdf(dataBuffer);
+  console.log(`📊 PDF chargé avec succès (${pdfData.numpages} page(s)).`);
+
+  const fullText = pdfData.text;
+  if (!fullText || fullText.trim().length === 0) {
+    console.error('❌ Aucun texte extrait du PDF. Le fichier est peut-être un scan ou une image.');
+    return;
   }
 
-  const client = new Mistral({ apiKey });
+  // 3. Découpage récursif du texte avec chevauchement (overlap)
+  console.log('✂️ Découpage du texte en chunks intelligents (max 1200 char, overlap 200 char)...');
+  const chunks = splitTextIntoChunks(fullText, 1200, 200);
+  console.log(`📦 Total de chunks générés : ${chunks.length}`);
 
-  console.log('🔍 Analyse du document et des tableaux via Mistral OCR...');
-  
-  // 2. Appel de l'API Mistral OCR (conserve les tableaux et la structure)
-  const ocrResponse = await client.ocr.process({
-    model: 'mistral-ocr-latest',
-    document: {
-      type: 'document_url',
-      documentUrl: dataUri,
-    },
-  });
-
-  // 3. Concaténation de tout le texte Markdown extrait page par page
-  let fullText = '';
-  for (const page of ocrResponse.pages) {
-    fullText += page.markdown + '\n\n';
-  }
-
-  console.log('✅ Extraction OCR réussie. Découpage et vectorisation...');
-
+  // 4. Initialisation des services Prisma & Vector
   const prisma = new PrismaService();
   await prisma.$connect();
   const vectorService = new VectorService(prisma);
 
-  // 4. Découpage sécurisé par blocs pour ne pas dépasser les limites d'embedding
-  const CHUNK_SIZE = 1500;
-  const chunks: string[] = [];
-  for (let i = 0; i < fullText.length; i += CHUNK_SIZE) {
-    chunks.push(fullText.substring(i, i + CHUNK_SIZE));
-  }
-
-  // 5. Insertion des blocs dans la base de données PostgreSQL
+  // 5. Ingestion et création des embeddings dans PostgreSQL (pgvector)
   for (let index = 0; index < chunks.length; index++) {
-    const chunkText = chunks[index].trim();
-    if (chunkText.length < 20) continue;
+    const chunkText = chunks[index];
 
     await vectorService.addDocumentChunk(chunkText, {
       source: 'reglement-trail-2027.pdf',
-      method: 'mistral-ocr',
+      method: 'pdf-parse',
       part: index + 1,
+      totalParts: chunks.length,
     });
-    console.log(`⏳ Bloc ${index + 1}/${chunks.length} inséré.`);
+    console.log(`⏳ Chunk ${index + 1}/${chunks.length} inséré.`);
   }
 
-  console.log('🎉 Ingestion OCR terminée avec succès ! Les tableaux sont désormais exploitables.');
+  console.log('🎉 Ingestion du PDF terminée avec succès !');
   await prisma.$disconnect();
 }
 
-runOcrIngestion().catch((error) => {
-  console.error('❌ Erreur lors de l\'ingestion OCR :', error);
+runPdfIngestion().catch((error) => {
+  console.error('❌ Erreur lors de l\'ingestion du PDF :', error);
   process.exit(1);
 });

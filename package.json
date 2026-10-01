@@ -1,5 +1,7 @@
 {
-  "devDependencies": {
-    "@types/node": "^26.6.1"
+  "name": "chat-bot-root",
+  "scripts": {
+    "dev": "echo '\n=================================\n 🌐 Frontend : http://localhost:5173\n ⚙️  Backend  : http://localhost:3000\n 🛢️  PostgreSQL : localhost:5432\n=================================\n' && docker compose up --build",
+    "ingest": "docker exec chat-backend-1 npx tsx src/ingest-test.ts"
   }
 }
