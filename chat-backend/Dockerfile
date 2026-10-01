@@ -10,7 +10,7 @@ COPY package*.json ./
 # 4. Installer les dépendances
 RUN npm install
 
-# 5. Copier le reste du code source de l'application
+# 5. Copier le reste du code source de l'application (inclut le dossier data, prisma, etc.)
 COPY . .
 
 # 6. Générer le client Prisma et compiler l'application Nest.js
