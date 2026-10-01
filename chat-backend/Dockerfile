@@ -20,5 +20,5 @@ RUN npm run build
 # 7. Exposer le port sur lequel tourne l'application
 EXPOSE 3000
 
-# 8. Commande pour lancer l'application en mode production
-CMD ["node", "dist/main"]
+# 8. Commande pour exécuter les migrations Prisma et lancer l'application
+CMD ["sh", "-c", "npx prisma db push && node dist/main"]

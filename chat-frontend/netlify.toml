@@ -1,0 +1,13 @@
+[build]
+  # Le dossier où se trouve le code React
+  base = "chat-frontend" 
+  # Commande pour compiler l'application
+  command = "npm run build"
+  # Dossier généré par la compilation
+  publish = "dist"
+
+[[redirects]]
+  # Nécessaire pour les applications React (Single Page Application)
+  from = "/*"
+  to = "/index.html"
+  status = 200
