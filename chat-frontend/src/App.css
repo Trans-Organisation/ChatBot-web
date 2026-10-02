@@ -44,6 +44,13 @@ body {
   height: 45px;
   width: auto;
   object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.header-logo:hover {
+  transform: scale(1.08);
+  opacity: 0.9;
 }
 
 .chat-header h1 {
@@ -397,7 +404,12 @@ body {
   font-size: 1rem;
   cursor: pointer;
   opacity: 0.8;
-  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: opacity 0.2s, background-color 0.2s;
 }
 
 .icon-btn:hover {
