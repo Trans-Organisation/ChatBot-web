@@ -144,17 +144,15 @@ export class VectorService implements OnModuleInit {
     `;
   }
 
-  async searchSimilarChunks(query: string, limit = 3): Promise<Array<{ content: string; metadata: any }>> {
-    const queryEmbedding = await this.generateEmbedding(query);
-    const vectorString = `[${queryEmbedding.join(',')}]`;
-
-    const results = await this.prisma.$queryRaw<Array<{ content: string; metadata: any }>>`
-      SELECT content, metadata, (embedding <=> ${vectorString}::vector) as distance
-      FROM document_chunks
-      ORDER BY distance ASC
-      LIMIT ${limit}
-    `;
-
-    return results;
-  }
+  async searchSimilarChunks(query: string, limit = 3): Promise<Array<{ content: string; metadata: any; distance: number }>> {
+  const queryEmbedding = await this.generateEmbedding(query);
+  const vectorString = `[${queryEmbedding.join(',')}]`;
+  const results = await this.prisma.$queryRaw<Array<{ content: string; metadata: any; distance: number }>>`
+    SELECT content, metadata, (embedding <=> ${vectorString}::vector) as distance
+    FROM document_chunks
+    ORDER BY distance ASC
+    LIMIT ${limit}
+  `;
+  return results;
+}
 }

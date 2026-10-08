@@ -34,18 +34,32 @@ export class ChatService {
 
     try {
       const relevantChunks = await this.vectorService.searchSimilarChunks(content, 3);
-      const contextText = relevantChunks.map((chunk: { content: string }) => chunk.content).join('\n---\n');
 
-      // 🔒 Prompt strict pour interdire toute hallucination
+      const DISTANCE_THRESHOLD = 0.45;
+      const validChunks = relevantChunks.filter((chunk) => chunk.distance <= DISTANCE_THRESHOLD);
+      
+      console.log(`[RAG Debug] Chunks trouvés:`, relevantChunks.map(c => ({ distance: c.distance, preview: c.content.slice(0, 60) + '...' })));
+      console.log(`[RAG Debug] Chunks valides (<= ${DISTANCE_THRESHOLD}):`, validChunks.length);
+
+      if (validChunks.length === 0) {
+        aiReply = "Désolé, je n'ai pas trouvé cette information dans les documents officiels de La Transju'. N'hésitez pas à poser votre question par e-mail à contact@latransju.com.";
+      } else {
+        const contextText = validChunks.map((chunk) => chunk.content).join('\n---\n');
+
       const systemPrompt = {
         role: 'system' as const,
         content: `Tu es l'assistant officiel de l'événement sportif La Transju'. 
 RÈGLE ABSOLUE : Tu dois répondre STRICTEMENT et UNIQUEMENT à partir des extraits de documents officiels fournis dans le contexte ci-dessous. 
-Si la réponse ne se trouve pas explicitement dans ce contexte, réponds textuellement que tu ne possèdes pas l'information dans les documents officiels et invite l'utilisateur à consulter le site de l'événement. 
-N'utilise JAMAIS tes connaissances générales, n'invente jamais de faits, de lieux, de parcours ou de chiffres.
+Si l'information demandée n'est pas présente ou complète dans le contexte, tu dois OBLIGATOIREMENT répondre mot pour mot :
+"Désolé, je ne trouve pas cette information dans les documents officiels. Pour toute question, n'hésitez pas à contacter l'organisation par e-mail à : contact@latransju.com"
+
+CONSIGNES STRICTES :
+- N'invite JAMAIS à consulter le site internet.
+- N'utilise JAMAIS tes connaissances générales.
+- Si le contexte ne donne pas la réponse exacte, renvoie systématiquement vers l'e-mail contact@latransju.com.
 
 Contexte officiel :
-${contextText ? contextText : 'Aucune information spécifique disponible dans la base de connaissances.'}`,
+${contextText}`,
       };
 
       const dbMessages = await this.prisma.message.findMany({
@@ -70,7 +84,8 @@ ${contextText ? contextText : 'Aucune information spécifique disponible dans la
           aiReply = messageContent;
         }
       }
-    } catch (error) {
+    }
+  } catch (error) {
       console.error('Erreur lors du traitement du message dans ChatService :', error);
     }
 
