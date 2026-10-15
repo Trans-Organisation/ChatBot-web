@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 
 export interface ScrapedPage {
@@ -13,6 +13,7 @@ export interface OfficialSearchResult extends ScrapedPage {
 
 @Injectable()
 export class WebScraperService {
+  private readonly logger = new Logger(WebScraperService.name);
   private readonly userAgent =
     process.env.WEB_INGEST_USER_AGENT ?? 'LaTransjuChatbot/1.0 (+https://www.latransju.com)';
 
@@ -119,5 +120,88 @@ export class WebScraperService {
       .toLocaleLowerCase('fr-FR')
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '');
+  }
+
+  async fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
+    const visited = new Set<string>();
+    return this.fetchSitemapUrlsRecursive(sitemapUrl, visited);
+  }
+
+  private async fetchSitemapUrlsRecursive(
+    sitemapUrl: string,
+    visited: Set<string>,
+  ): Promise<string[]> {
+    const normalizedSitemapUrl = new URL(sitemapUrl).toString();
+    if (visited.has(normalizedSitemapUrl)) return [];
+    visited.add(normalizedSitemapUrl);
+
+    const xml = await this.fetchSitemapXml(normalizedSitemapUrl);
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const pageUrls: string[] = [];
+    const childSitemaps: string[] = [];
+
+    $('sitemapindex > sitemap > loc, sitemapindex sitemap > loc').each((_, element) => {
+      const location = $(element).text().trim();
+      if (location) childSitemaps.push(new URL(location, normalizedSitemapUrl).toString());
+    });
+
+    $('urlset > url > loc, urlset url > loc').each((_, element) => {
+      const location = $(element).text().trim();
+      if (location) pageUrls.push(new URL(location, normalizedSitemapUrl).toString());
+    });
+
+    // Certains générateurs omettent le namespace ou la balise racine attendue.
+    if (childSitemaps.length === 0 && pageUrls.length === 0) {
+      $('loc').each((_, element) => {
+        const location = $(element).text().trim();
+        if (!location) return;
+        const absoluteUrl = new URL(location, normalizedSitemapUrl).toString();
+        if (this.isSitemapUrl(absoluteUrl)) childSitemaps.push(absoluteUrl);
+        else pageUrls.push(absoluteUrl);
+      });
+    }
+
+    const nestedUrls: string[] = [];
+    for (const childSitemap of new Set(childSitemaps)) {
+      try {
+        nestedUrls.push(...await this.fetchSitemapUrlsRecursive(childSitemap, visited));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Sous-sitemap ignoré (${childSitemap}) : ${message}`);
+      }
+    }
+
+    return [...new Set([...pageUrls, ...nestedUrls])];
+  }
+
+  private async fetchSitemapXml(sitemapUrl: string): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Number(process.env.WEB_INGEST_TIMEOUT_MS ?? 15000),
+    );
+
+    try {
+      const response = await fetch(sitemapUrl, {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/xml, text/xml, application/xhtml+xml',
+          'User-Agent': this.userAgent,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return response.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private isSitemapUrl(url: string): boolean {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return pathname.endsWith('.xml') || pathname.includes('sitemap');
   }
 }

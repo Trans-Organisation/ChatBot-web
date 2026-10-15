@@ -49,6 +49,19 @@ docker compose up -d --build chat-backend
 docker exec chat-backend-1 npm run ingest:web
 ```
 
+Pour ingérer automatiquement toutes les pages référencées par un sitemap,
+utilisez plutôt `WEB_SITEMAP_URL` :
+
+```env
+WEB_SITEMAP_URL=https://www.latransju.com/sitemap.xml
+```
+
+Si `WEB_SITEMAP_URL` est défini, il est prioritaire sur `WEB_INGEST_URLS`.
+Le scraper suit récursivement les sous-sitemaps d'un `sitemap_index.xml`.
+Par compatibilité, une URL dont le chemin contient `sitemap` et se termine par
+`.xml` est également détectée automatiquement si elle est placée dans
+`WEB_INGEST_URLS`.
+
 Il est aussi possible de passer les URLs directement à la commande :
 
 ```bash

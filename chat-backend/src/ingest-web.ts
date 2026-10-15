@@ -9,10 +9,21 @@ const urls = [process.env.WEB_INGEST_URLS ?? '', ...process.argv.slice(2)]
   .split(',')
   .map((url) => url.trim())
   .filter(Boolean);
+const configuredSitemapUrl = process.env.WEB_SITEMAP_URL?.trim();
+const detectedSitemapUrl = urls.find((url) => {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return pathname.endsWith('.xml') && pathname.includes('sitemap');
+  } catch {
+    return false;
+  }
+});
+const sitemapUrl = configuredSitemapUrl || detectedSitemapUrl;
+const pageUrls = urls.filter((url) => url !== detectedSitemapUrl);
 
-if (urls.length === 0) {
+if (!sitemapUrl && pageUrls.length === 0) {
   console.error(
-    '❌ Définissez WEB_INGEST_URLS ou passez une ou plusieurs URLs en arguments.',
+    '❌ Définissez WEB_SITEMAP_URL, WEB_INGEST_URLS ou passez une ou plusieurs URLs en arguments.',
   );
   process.exit(1);
 }
@@ -21,7 +32,9 @@ const app = await NestFactory.createApplicationContext(AppModule);
 
 try {
   const ingestion = app.get(WebIngestionService);
-  const results = await ingestion.ingestUrls(urls);
+  const results = sitemapUrl
+    ? await ingestion.ingestSitemap(sitemapUrl)
+    : await ingestion.ingestUrls(pageUrls);
   console.table(results);
   if (results.some((result) => result.status === 'failed')) {
     process.exitCode = 1;

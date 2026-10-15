@@ -62,4 +62,11 @@ export class WebIngestionService {
     this.logger.log(`${chunks.length} chunks insérés pour ${url}`);
     return { url, status: 'inserted', chunks: chunks.length };
   }
+
+  async ingestSitemap(sitemapUrl: string): Promise<WebIngestionResult[]> {
+    this.logger.log(`Début de l'ingestion via le sitemap : ${sitemapUrl}`);
+    const urls = await this.scraper.fetchSitemapUrls(sitemapUrl);
+    this.logger.log(`${urls.length} URL(s) trouvée(s) dans le sitemap.`);
+    return this.ingestUrls(urls);
+  }
 }
