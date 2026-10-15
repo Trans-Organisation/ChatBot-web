@@ -25,6 +25,8 @@ services:
       - .env
     environment:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - WEB_INGEST_URLS=${WEB_INGEST_URLS:-}
+      - RAG_DISTANCE_THRESHOLD=${RAG_DISTANCE_THRESHOLD:-0.55}
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/chatbot_db?schema=public
     depends_on:
       - postgres

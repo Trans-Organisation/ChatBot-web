@@ -25,6 +25,92 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Ingestion des pages web
+
+Le backend peut aspirer des pages HTML officielles, extraire leur contenu principal,
+le découper en blocs d'environ 1 500 caractères et les indexer dans PostgreSQL/pgvector.
+Les pages inchangées sont ignorées grâce à une empreinte SHA-256 ; lorsqu'une page
+change, ses anciens chunks sont remplacés dans une transaction.
+
+Définissez les URLs séparées par des virgules ainsi que les variables habituelles
+(`DATABASE_URL` et `MISTRAL_API_KEY`) :
+
+```bash
+export WEB_INGEST_URLS="https://www.latransju.com/actualites,https://www.latransju.com/tarifs"
+npm run ingest:web
+```
+
+Avec Docker Compose, ajoutez `WEB_INGEST_URLS=...` dans le fichier `.env` situé à
+la racine du projet, puis recréez le backend :
+
+```bash
+WEB_INGEST_URLS="https://www.latransju.com/actualites,https://www.latransju.com/tarifs"
+docker compose up -d --build chat-backend
+docker exec chat-backend-1 npm run ingest:web
+```
+
+Il est aussi possible de passer les URLs directement à la commande :
+
+```bash
+docker exec chat-backend-1 npm run ingest:web -- \
+  https://www.latransju.com/actualites \
+  https://www.latransju.com/tarifs
+```
+
+Chaque URL est traitée indépendamment : une URL en erreur ne supprime pas les
+chunks déjà ingérés des autres pages. Le tableau final indique `failed` et le
+détail de l'erreur ; la commande se termine toutefois avec un code de sortie 1
+pour signaler qu'une correction de configuration est nécessaire.
+
+Les options `WEB_INGEST_TIMEOUT_MS` (15 000 ms par défaut) et
+`WEB_INGEST_USER_AGENT` permettent de personnaliser les requêtes. Le scraper repose
+sur Cheerio et cible `main`, `article` ou `[role="main"]` après suppression des
+menus, pieds de page, scripts, styles et éléments de consentement.
+
+## Ingestion de tous les PDF
+
+L'ingestion PDF parcourt récursivement les dossiers `data/` détectés dans le
+conteneur et le projet. Chaque fichier `.pdf` est extrait, découpé puis vectorisé.
+Les fichiers déjà présents en base sont ignorés grâce à leur chemin relatif.
+
+Pour lancer manuellement l'ingestion :
+
+```bash
+npm run ingest
+```
+
+Avec Docker :
+
+```bash
+docker exec chat-backend-1 npm run ingest
+```
+
+L'auto-ingestion au démarrage du backend utilise le même mécanisme.
+
+## Vider le RAG
+
+La commande exige un périmètre explicite :
+
+```bash
+# Supprimer uniquement les chunks issus des pages web
+docker exec chat-backend-1 npm run clear:rag -- --scope=web
+
+# Supprimer uniquement les chunks PDF
+docker exec chat-backend-1 npm run clear:rag -- --scope=pdf
+
+# Supprimer tous les chunks (web, PDF et autres sources)
+docker exec chat-backend-1 npm run clear:rag -- --scope=all
+```
+
+La commande affiche le nombre de chunks supprimés. Le périmètre `all` est
+irréversible : relancez ensuite l'ingestion PDF et web si vous souhaitez
+reconstituer la base vectorielle.
+
+Le chatbot recherche jusqu'à 8 chunks par question. `RAG_DISTANCE_THRESHOLD`
+contrôle la distance cosinus maximale acceptée (valeur par défaut : `0.55`) :
+une valeur plus basse est plus stricte, une valeur plus haute récupère davantage
+de contexte mais peut inclure des extraits moins proches.
+
 ## Project setup
 
 ```bash

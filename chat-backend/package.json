@@ -8,7 +8,9 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "ingest": "tsx src/ingest-test.ts",
+    "ingest": "tsx src/ingest-pdf.ts",
+    "clear:rag": "node dist/clear-rag.js",
+    "ingest:web": "node dist/ingest-web.js",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -31,6 +33,7 @@
     "@nestjs/observe": "^0.1.8",
     "@nestjs/platform-express": "^12.0.1",
     "@prisma/client": "^6.19.3",
+    "cheerio": "^1.2.0",
     "pdf-parse": "^1.1.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
