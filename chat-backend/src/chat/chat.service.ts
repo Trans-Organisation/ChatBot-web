@@ -32,9 +32,11 @@ export class ChatService {
       },
     });
 
-    let aiReply = "Désolé, une erreur est survenue lors de la communication avec l'assistant.";
+    let aiReply = this.getFallbackResponse(content, 'error');
 
     try {
+      const language = this.detectLanguage(content);
+      const languageName = language === 'en' ? 'English' : language === 'es' ? 'Spanish' : 'French';
       const officialUrls = (process.env.WEB_INGEST_URLS ?? '').split(',');
       const officialPages = await this.webScraper.searchOfficialUrls(officialUrls, content);
       const relevantChunks = await this.vectorService.searchSimilarChunks(content, 8);
@@ -55,7 +57,7 @@ export class ChatService {
       })));
 
       if (officialPages.length === 0 && validChunks.length === 0) {
-        aiReply = "Désolé, je n'ai pas trouvé cette information dans les documents officiels de La Transju'. N'hésitez pas à poser votre question par e-mail à contact@latransju.com.";
+        aiReply = this.getFallbackResponse(content, 'not-found');
       } else {
         const liveContext = officialPages
           .map((page, index) =>
@@ -74,9 +76,12 @@ export class ChatService {
       const systemPrompt = {
         role: 'system' as const,
         content: `Tu es l'assistant officiel de l'événement sportif La Transju'.
-Réponds en français, de façon directe et utile.
+LANGUE DE RÉPONSE OBLIGATOIRE : ${languageName}.
+Réponds entièrement dans cette langue, même si le contexte ou l'historique est dans une autre langue.
+N'utilise jamais le français si LANGUE DE RÉPONSE vaut English ou Spanish.
+Réponds de façon directe et utile, sans traduire les noms propres, URLs, devises ou nombres.
 Tu dois répondre uniquement à partir du contexte officiel fourni dans le dernier message utilisateur.
-Si l'information demandée n'est pas présente ou complète dans le contexte, tu dois OBLIGATOIREMENT répondre mot pour mot :
+Si l'information demandée n'est pas présente ou complète dans le contexte, réponds dans la langue de la question avec l'équivalent de :
 "Désolé, je ne trouve pas cette information dans les documents officiels. Pour toute question, n'hésitez pas à contacter l'organisation par e-mail à : contact@latransju.com"
 Ne renvoie pas la réponse de secours si le contexte contient la réponse, même si elle se trouve dans un tableau ou une liste.`,
       };
@@ -99,7 +104,7 @@ Ne renvoie pas la réponse de secours si le contexte contient la réponse, même
           ...formattedHistory,
           {
             role: 'user' as const,
-            content: `Question : ${content}\n\nContexte officiel à utiliser :\n${contextText}`,
+            content: `LANGUE DE RÉPONSE : ${languageName}\nQuestion : ${content}\n\nContexte officiel à utiliser :\n${contextText}`,
           },
         ],
       });
@@ -109,6 +114,7 @@ Ne renvoie pas la réponse de secours si le contexte contient la réponse, même
         if (typeof messageContent === 'string') {
           aiReply = messageContent;
         }
+
       }
     }
   } catch (error) {
@@ -126,5 +132,58 @@ Ne renvoie pas la réponse de secours si le contexte contient la réponse, même
     return {
       reply: aiReply,
     };
+  }
+
+  private getFallbackResponse(
+    question: string,
+    type: 'not-found' | 'error',
+  ): string {
+    const language = this.detectLanguage(question);
+
+    if (type === 'error') {
+      return language === 'en'
+        ? 'Sorry, an error occurred while communicating with the assistant.'
+        : language === 'es'
+          ? 'Lo siento, se produjo un error al comunicarse con el asistente.'
+          : "Désolé, une erreur est survenue lors de la communication avec l'assistant.";
+    }
+
+    return language === 'en'
+      ? "Sorry, I couldn't find this information in La Transju' official documents. For any questions, please contact the organization by email at contact@latransju.com."
+      : language === 'es'
+        ? "Lo siento, no encuentro esta información en los documentos oficiales de La Transju'. Para cualquier pregunta, contacte con la organización por correo electrónico: contact@latransju.com."
+        : "Désolé, je ne trouve pas cette information dans les documents officiels. Pour toute question, n'hésitez pas à contacter l'organisation par e-mail à : contact@latransju.com.";
+  }
+
+  private detectLanguage(question: string): 'fr' | 'en' | 'es' {
+    const normalized = question
+      .toLocaleLowerCase('fr-FR')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
+    const scores = {
+      fr: this.countLanguageMatches(normalized, [
+        'quel', 'quelle', 'quels', 'quelles', 'sont', 'dans', 'pour', 'avec',
+        'tarif', 'prix', 'combien', 'comment', 'ou', 'inscription',
+      ]),
+      en: this.countLanguageMatches(normalized, [
+        'what', 'which', 'where', 'when', 'how', 'much', 'are', 'the',
+        'price', 'prices', 'registration', 'fee',
+      ]),
+      es: this.countLanguageMatches(normalized, [
+        'que', 'cual', 'cuales', 'donde', 'cuando', 'como', 'cuanto',
+        'son', 'precio', 'precios', 'inscripción',
+      ]),
+    };
+
+    if (scores.en > scores.fr && scores.en >= scores.es) return 'en';
+    if (scores.es > scores.fr && scores.es > scores.en) return 'es';
+    return 'fr';
+  }
+
+  private countLanguageMatches(text: string, terms: string[]): number {
+    return terms.reduce(
+      (score, term) => score + (new RegExp(`\\b${term}\\b`, 'u').test(text) ? 1 : 0),
+      0,
+    );
   }
 }
