@@ -163,15 +163,16 @@ Ne renvoie pas la réponse de secours si le contexte contient la réponse, même
     const scores = {
       fr: this.countLanguageMatches(normalized, [
         'quel', 'quelle', 'quels', 'quelles', 'sont', 'dans', 'pour', 'avec',
-        'tarif', 'prix', 'combien', 'comment', 'ou', 'inscription',
+        'tarif', 'prix', 'combien', 'comment', 'ou', 'inscription', 'est', 'les',
+        'des', 'une', 'pas', 'qui', 'faut', 'peut',
       ]),
       en: this.countLanguageMatches(normalized, [
         'what', 'which', 'where', 'when', 'how', 'much', 'are', 'the',
         'price', 'prices', 'registration', 'fee',
       ]),
       es: this.countLanguageMatches(normalized, [
-        'que', 'cual', 'cuales', 'donde', 'cuando', 'como', 'cuanto',
-        'son', 'precio', 'precios', 'inscripción',
+        'cual', 'cuales', 'donde', 'cuando', 'como', 'cuanto',
+        'precio', 'precios', 'inscripción', 'cuesta', 'para',
       ]),
     };
 
