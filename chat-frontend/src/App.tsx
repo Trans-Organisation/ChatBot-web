@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
-import transJuLogo from './assets/transJu-logo.png';
+import { getDisciplineTheme } from './theme/disciplines';
+import { TransjuIcon } from './components/TransjuIcon';
 
 interface Message {
   sender: 'utilisateur' | 'ai';
@@ -63,9 +64,18 @@ function App({ discipline = 'general' }: AppProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const normalizedDiscipline = discipline.toLowerCase();
+  const theme = getDisciplineTheme(discipline);
+  const normalizedDiscipline = theme.key;
   const quickReplies = QUICK_REPLIES_BY_DISCIPLINE[normalizedDiscipline] || QUICK_REPLIES_BY_DISCIPLINE.general;
   const disciplineLabel = DISCIPLINE_LABELS[normalizedDiscipline];
+
+  const themeStyle = {
+    '--tj-primary': theme.primary,
+    '--tj-accent': theme.accent,
+    '--tj-accent-hover': theme.accentHover,
+    '--tj-accent-text': theme.accentText,
+    '--tj-header-border': theme.headerBorder,
+  } as CSSProperties;
 
   useEffect(() => {
     let storedSessionId = localStorage.getItem('chat_session_id');
@@ -130,19 +140,31 @@ function App({ discipline = 'general' }: AppProps) {
   };
 
   return (
-    <div className="widget-wrapper">
+    <div className="widget-wrapper" data-discipline={normalizedDiscipline} style={themeStyle}>
       {isOpen && (
         <div className={`chat-container ${isExpanded ? 'expanded' : ''}`}>
           <header className="chat-header">
             <div className="chat-header-title">
-              <img
-                src={transJuLogo}
-                alt="Logo Transju"
-                className="header-logo"
+              <button
+                type="button"
+                className="header-logo-btn"
                 onClick={startNewSession}
                 title="Recommencer une nouvelle conversation"
-              />
-              <h1>Assistant Transju</h1>
+                aria-label="Recommencer une nouvelle conversation"
+              >
+                <TransjuIcon
+                  discipline={normalizedDiscipline}
+                  color={theme.iconColor}
+                  size={36}
+                  className="header-logo"
+                />
+              </button>
+              <div className="header-title-group">
+                <h1>Assistant Transju</h1>
+                {theme.shortTag && (
+                  <span className="discipline-badge">{theme.shortTag}</span>
+                )}
+              </div>
             </div>
             <div className="header-actions">
               <button
@@ -227,7 +249,12 @@ function App({ discipline = 'general' }: AppProps) {
       )}
 
       <button className="chat-trigger-btn" onClick={() => setIsOpen(!isOpen)}>
-        <img src={transJuLogo} alt="Logo Transju" className="trigger-logo" />
+        <TransjuIcon
+          discipline={normalizedDiscipline}
+          color={theme.iconColor}
+          size={24}
+          className="trigger-logo"
+        />
         <span>Besoin d'aide ?</span>
       </button>
     </div>

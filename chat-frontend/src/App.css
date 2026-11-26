@@ -23,15 +23,15 @@ body {
   border: 1px solid #D0D0D0; /* "Cultured" */
 }
 
-/* En-tête Midnight Blue */
+/* En-tête Midnight Blue + bordure couleur de l'événement */
 .chat-header {
   padding: 20px 24px;
-  background-color: #110856; /* "Midnight Blue" officiel - Page 15 */
+  background-color: var(--tj-primary, #110856); /* "Midnight Blue" officiel - Page 15 */
   color: #FAFAFA;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 4px solid #EA0066; /* Touche de "Razzmatazz" dynamisante - Page 15 */
+  border-bottom: 4px solid var(--tj-header-border, #EA0066);
 }
 
 .chat-header-title {
@@ -40,9 +40,37 @@ body {
   gap: 12px;
 }
 
+.header-logo-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.discipline-badge {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background-color: var(--tj-accent, #EA0066);
+  color: var(--tj-accent-text, #FFFFFF);
+}
+
 .header-logo {
-  height: 45px;
-  width: auto;
+  height: 36px;
+  width: 36px;
   object-fit: contain;
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -54,10 +82,10 @@ body {
 }
 
 .chat-header h1 {
-  font-family: 'Raleway-Extra-Bold', sans-serif;
+  font-family: 'Raleway', sans-serif;
   color: white;
   font-weight: 800;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -243,11 +271,11 @@ body {
   background-color: #ffffff;
 }
 
-/* Bouton d'action principal (Razzmatazz - 10% de couleur d'appel selon p.17) */
+/* Bouton d'action principal (10% de couleur d'appel selon p.17 de la charte) */
 .chat-button {
   padding: 0 24px;
-  background-color: #EA0066; /* "Razzmatazz" - Page 15 */
-  color: #ffffff;
+  background-color: var(--tj-accent, #EA0066);
+  color: var(--tj-accent-text, #ffffff);
   border: none;
   border-radius: 6px;
   font-family: 'Raleway', sans-serif; /* Typographie bouton */
@@ -260,7 +288,7 @@ body {
 }
 
 .chat-button:hover:not(:disabled) {
-  background-color: #C80056;
+  background-color: var(--tj-accent-hover, #C80056);
   transform: translateY(-1px);
 }
 
@@ -281,26 +309,27 @@ body {
   align-items: flex-end; /* 👈 Aligné à droite */
 }
 
-/* Pastille déclencheuse (Midnight Blue + Razzmatazz au hover) */
+/* Pastille déclencheuse (Midnight Blue + couleur de section) */
 .chat-trigger-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  background-color: #110856;
+  background-color: var(--tj-primary, #110856);
   color: #FAFAFA;
-  border: 2px solid #EA0066;
+  border: 2px solid var(--tj-header-border, #EA0066);
   padding: 12px 20px;
   border-radius: 30px;
   font-family: 'Raleway', sans-serif;
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(17, 8, 86, 0.3);
-  transition: transform 0.2s, background-color 0.2s;
+  transition: transform 0.2s, background-color 0.2s, color 0.2s;
 }
 
 .chat-trigger-btn:hover {
   transform: scale(1.05);
-  background-color: #EA0066;
+  background-color: var(--tj-accent, #EA0066);
+  color: var(--tj-accent-text, #FAFAFA);
 }
 
 .trigger-logo {
@@ -369,9 +398,9 @@ body {
 }
 
 .quick-reply-chip:hover:not(:disabled) {
-  background-color: #110856;
+  background-color: var(--tj-primary, #110856);
   color: #ffffff;
-  border-color: #EA0066;
+  border-color: var(--tj-header-border, #EA0066);
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(17, 8, 86, 0.15);
 }
