@@ -2,24 +2,12 @@ import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { WebIngestionService } from './ingestion/web-ingestion.service.js';
+import {
+  resolveWebIngestionTargets,
+  WebIngestionService,
+} from './ingestion/web-ingestion.service.js';
 
-const urls = [process.env.WEB_INGEST_URLS ?? '', ...process.argv.slice(2)]
-  .join(',')
-  .split(',')
-  .map((url) => url.trim())
-  .filter(Boolean);
-const configuredSitemapUrl = process.env.WEB_SITEMAP_URL?.trim();
-const detectedSitemapUrl = urls.find((url) => {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith('.xml') && pathname.includes('sitemap');
-  } catch {
-    return false;
-  }
-});
-const sitemapUrl = configuredSitemapUrl || detectedSitemapUrl;
-const pageUrls = urls.filter((url) => url !== detectedSitemapUrl);
+const { sitemapUrl, pageUrls } = resolveWebIngestionTargets(process.argv.slice(2));
 
 if (!sitemapUrl && pageUrls.length === 0) {
   console.error(
@@ -27,6 +15,8 @@ if (!sitemapUrl && pageUrls.length === 0) {
   );
   process.exit(1);
 }
+
+process.env.SKIP_AUTO_INGEST ??= 'true';
 
 const app = await NestFactory.createApplicationContext(AppModule);
 

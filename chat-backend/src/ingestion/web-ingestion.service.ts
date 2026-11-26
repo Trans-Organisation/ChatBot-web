@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { VectorService } from '../vector/vector.service.js';
 import { splitTextIntoChunks } from './text-chunker.js';
@@ -11,14 +11,71 @@ export interface WebIngestionResult {
   error?: string;
 }
 
+export interface WebIngestionTargets {
+  sitemapUrl?: string;
+  pageUrls: string[];
+}
+
+export function resolveWebIngestionTargets(extraUrls: string[] = []): WebIngestionTargets {
+  const urls = [process.env.WEB_INGEST_URLS ?? '', ...extraUrls]
+    .join(',')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const configuredSitemapUrl = process.env.WEB_SITEMAP_URL?.trim();
+  const detectedSitemapUrl = urls.find((url) => {
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      return pathname.endsWith('.xml') && pathname.includes('sitemap');
+    } catch {
+      return false;
+    }
+  });
+  const sitemapUrl = configuredSitemapUrl || detectedSitemapUrl;
+  const pageUrls = urls.filter((url) => url !== detectedSitemapUrl);
+  return { sitemapUrl, pageUrls };
+}
+
 @Injectable()
-export class WebIngestionService {
+export class WebIngestionService implements OnModuleInit {
   private readonly logger = new Logger(WebIngestionService.name);
 
   constructor(
     @Inject(WebScraperService) private readonly scraper: WebScraperService,
     @Inject(VectorService) private readonly vectorService: VectorService,
   ) {}
+
+  onModuleInit() {
+    if (process.env.SKIP_AUTO_INGEST === 'true') return;
+
+    const { sitemapUrl, pageUrls } = resolveWebIngestionTargets();
+    if (!sitemapUrl && pageUrls.length === 0) {
+      this.logger.log(
+        'ℹ️ Aucune URL web configurée (WEB_SITEMAP_URL / WEB_INGEST_URLS). Auto-ingestion web ignorée.',
+      );
+      return;
+    }
+
+    // Exécution en arrière-plan pour ne pas bloquer le démarrage HTTP (ex. healthcheck Railway)
+    void this.runAutoIngest(sitemapUrl, pageUrls);
+  }
+
+  private async runAutoIngest(sitemapUrl: string | undefined, pageUrls: string[]): Promise<void> {
+    try {
+      this.logger.log('🌐 Début de l\'auto-ingestion des pages web...');
+      const results = sitemapUrl
+        ? await this.ingestSitemap(sitemapUrl)
+        : await this.ingestUrls(pageUrls);
+      const inserted = results.filter((r) => r.status === 'inserted').length;
+      const unchanged = results.filter((r) => r.status === 'unchanged').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+      this.logger.log(
+        `🌐 Auto-ingestion web terminée : ${inserted} insérée(s), ${unchanged} inchangée(s), ${failed} en erreur.`,
+      );
+    } catch (error) {
+      this.logger.error("Erreur lors de l'auto-ingestion web :", error);
+    }
+  }
 
   async ingestUrls(urls: string[]): Promise<WebIngestionResult[]> {
     const results: WebIngestionResult[] = [];
