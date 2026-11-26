@@ -468,3 +468,32 @@ body {
     width: auto;
   }
 }
+
+/* Empêche WordPress d'imposer ses tailles de titres (55px) dans le chatbot */
+.widget-wrapper .message h1,
+.widget-wrapper .message h2,
+.widget-wrapper .message h3,
+.widget-wrapper .message h4 {
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+  font-weight: 700 !important;
+  margin: 10px 0 6px 0 !important;
+  color: inherit !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
+/* Assure également une mise en page propre des listes et paragraphes */
+.widget-wrapper .message p,
+.widget-wrapper .message ul,
+.widget-wrapper .message ol,
+.widget-wrapper .message li {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+.widget-wrapper .message ul,
+.widget-wrapper .message ol {
+  padding-left: 18px !important;
+  margin: 6px 0 !important;
+}
