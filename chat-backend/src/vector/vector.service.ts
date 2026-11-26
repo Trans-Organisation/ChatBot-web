@@ -291,10 +291,13 @@ export class VectorService implements OnModuleInit {
       'mais', 'nous', 'plus', 'pour', 'quel', 'quelle', 'quelles', 'quels',
       'sans', 'sont', 'sous', 'tout', 'tous', 'toute', 'toutes', 'vous',
     ]);
+    const normalizedQuery = query
+      .toLocaleLowerCase('fr-FR')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
     const keywords = [
       ...new Set(
-        query
-          .toLocaleLowerCase('fr-FR')
+        normalizedQuery
           .replace(/[^\p{L}\p{N}\s]/gu, ' ')
           .split(/\s+/)
           .filter((term) => term.length >= 4 && !stopWords.has(term)),
@@ -309,7 +312,9 @@ export class VectorService implements OnModuleInit {
       }));
     }
 
-    const tsQueryString = keywords.join(' | ');
+    // Préfixe `:*` sur dictionnaire `simple` + suppression des accents via `translate`
+    // pour que "batons" matche "Bâtons" et "materiel" matche "Matériel"
+    const tsQueryString = keywords.map((term) => `${term}:*`).join(' | ');
     let keywordResults: Array<{ id: string; content: string; metadata: any; distance: number }> = [];
     try {
       keywordResults = await this.prisma.$queryRaw<
@@ -317,21 +322,33 @@ export class VectorService implements OnModuleInit {
       >`
         SELECT id, content, metadata, (embedding <=> ${vectorString}::vector) as distance
         FROM document_chunks,
-             to_tsquery('french', ${tsQueryString}) AS q
+             to_tsquery('simple', ${tsQueryString}) AS q
         WHERE to_tsvector(
-          'french',
-          content || ' ' ||
-          coalesce(metadata->>'fileName', '') || ' ' ||
-          coalesce(metadata->>'title', '') || ' ' ||
-          coalesce(metadata->>'url', '')
+          'simple',
+          translate(
+            lower(
+              content || ' ' ||
+              coalesce(metadata->>'fileName', '') || ' ' ||
+              coalesce(metadata->>'title', '') || ' ' ||
+              coalesce(metadata->>'url', '')
+            ),
+            'àâäéèêëîïôöùûüÿç',
+            'aaaeeeeiioouuuyc'
+          )
         ) @@ q
         ORDER BY ts_rank(
           to_tsvector(
-            'french',
-            content || ' ' ||
-            coalesce(metadata->>'fileName', '') || ' ' ||
-            coalesce(metadata->>'title', '') || ' ' ||
-            coalesce(metadata->>'url', '')
+            'simple',
+            translate(
+              lower(
+                content || ' ' ||
+                coalesce(metadata->>'fileName', '') || ' ' ||
+                coalesce(metadata->>'title', '') || ' ' ||
+                coalesce(metadata->>'url', '')
+              ),
+              'àâäéèêëîïôöùûüÿç',
+              'aaaeeeeiioouuuyc'
+            )
           ),
           q
         ) DESC, distance ASC

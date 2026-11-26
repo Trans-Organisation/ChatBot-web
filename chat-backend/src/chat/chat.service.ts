@@ -35,11 +35,31 @@ export class ChatService {
     let aiReply = this.getFallbackResponse(content, 'error');
 
     try {
+      const dbMessages = await this.prisma.message.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: 'asc' },
+      });
+      const formattedHistory = dbMessages.slice(0, -1).slice(-10).map((msg) => ({
+        role: msg.sender === 'utilisateur' ? ('user' as const) : ('assistant' as const),
+        content: msg.content,
+      }));
+
+      // Si la question est une relance sans nom d'épreuve (ex: "et qu'en est-il des bâtons ?"),
+      // on réinjecte la dernière question utilisateur dans la requête RAG.
+      const mentionsRace = /\b(marathon|semi|trail|transju|transjurassienne|ultra|82|65|42|25|10|5)\b/i.test(
+        content,
+      );
+      const lastUserMessage = [...formattedHistory]
+        .reverse()
+        .find((msg) => msg.role === 'user')?.content;
+      const ragQuery =
+        !mentionsRace && lastUserMessage ? `${lastUserMessage} ${content}` : content;
+
       const language = this.detectLanguage(content);
       const languageName = language === 'en' ? 'English' : language === 'es' ? 'Spanish' : 'French';
       const officialUrls = (process.env.WEB_INGEST_URLS ?? '').split(',');
-      const officialPages = await this.webScraper.searchOfficialUrls(officialUrls, content);
-      const relevantChunks = await this.vectorService.searchSimilarChunks(content, 12);
+      const officialPages = await this.webScraper.searchOfficialUrls(officialUrls, ragQuery);
+      const relevantChunks = await this.vectorService.searchSimilarChunks(ragQuery, 12);
 
       const DISTANCE_THRESHOLD = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55);
       const validChunks = relevantChunks.filter(
@@ -93,16 +113,6 @@ Si l'information demandée n'est pas présente ou complète dans le contexte, r�
 "Désolé, je ne trouve pas cette information dans les documents officiels. Pour toute question, n'hésitez pas à contacter l'organisation par e-mail à : contact@latransju.com"
 Ne renvoie pas la réponse de secours si le contexte contient la réponse, même si elle se trouve dans un tableau ou une liste.`,
       };
-
-      const dbMessages = await this.prisma.message.findMany({
-        where: { sessionId },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const formattedHistory = dbMessages.slice(0, -1).slice(-10).map((msg) => ({
-        role: msg.sender === 'utilisateur' ? ('user' as const) : ('assistant' as const),
-        content: msg.content,
-      }));
 
       const response = await this.mistral.chat.complete({
         model: 'mistral-small-latest',
