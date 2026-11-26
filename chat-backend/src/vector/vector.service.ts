@@ -87,17 +87,25 @@ export class VectorService implements OnModuleInit {
   async ingestPdfFile(filePath: string, method = 'pdf-parse'): Promise<number> {
     const fileName = path.basename(filePath);
     const relativePath = path.relative(process.cwd(), filePath);
+    const docPrefix = `[Document : ${fileName}]`;
     const existing = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*) as count
       FROM document_chunks
-      WHERE metadata->>'filePath' = ${relativePath}
-         OR metadata->>'source' = ${fileName}
+      WHERE (metadata->>'filePath' = ${relativePath} OR metadata->>'source' = ${fileName})
+        AND content LIKE ${`${docPrefix}%`}
     `;
 
     if (Number(existing[0]?.count ?? 0) > 0) {
       this.logger.log(`ℹ️ Le PDF '${relativePath}' est déjà indexé. Ingestion ignorée.`);
       return 0;
     }
+
+    // Supprime d'éventuels anciens chunks sans préfixe [Document : ...] avant ré-indexation
+    await this.prisma.$executeRaw`
+      DELETE FROM document_chunks
+      WHERE metadata->>'filePath' = ${relativePath}
+         OR metadata->>'source' = ${fileName}
+    `;
 
     this.logger.log(`📄 Début de l'ingestion : ${filePath}`);
     const dataBuffer = fs.readFileSync(filePath);
@@ -260,15 +268,86 @@ export class VectorService implements OnModuleInit {
     });
   }
 
-  async searchSimilarChunks(query: string, limit = 8): Promise<Array<{ content: string; metadata: any; distance: number }>> {
-  const queryEmbedding = await this.generateEmbedding(query);
-  const vectorString = `[${queryEmbedding.join(',')}]`;
-  const results = await this.prisma.$queryRaw<Array<{ content: string; metadata: any; distance: number }>>`
-    SELECT content, metadata, (embedding <=> ${vectorString}::vector) as distance
-    FROM document_chunks
-    ORDER BY distance ASC
-    LIMIT ${limit}
-  `;
-  return results;
-}
+  async searchSimilarChunks(
+    query: string,
+    limit = 12,
+  ): Promise<Array<{ content: string; metadata: any; distance: number }>> {
+    const queryEmbedding = await this.generateEmbedding(query);
+    const vectorString = `[${queryEmbedding.join(',')}]`;
+
+    const vectorResults = await this.prisma.$queryRaw<
+      Array<{ id: string; content: string; metadata: any; distance: number }>
+    >`
+      SELECT id, content, metadata, (embedding <=> ${vectorString}::vector) as distance
+      FROM document_chunks
+      ORDER BY distance ASC
+      LIMIT ${limit}
+    `;
+
+    // Recherche lexicale complémentaire (hybride) pour garantir la remontée des documents
+    // mentionnant explicitement l'épreuve ou les mots-clés de la question
+    const keywords = [
+      ...new Set(
+        query
+          .toLocaleLowerCase('fr-FR')
+          .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+          .split(/\s+/)
+          .filter((term) => term.length >= 4),
+      ),
+    ].slice(0, 8);
+
+    if (keywords.length === 0) {
+      return vectorResults.map(({ content, metadata, distance }) => ({
+        content,
+        metadata,
+        distance,
+      }));
+    }
+
+    const tsQueryString = keywords.join(' | ');
+    let keywordResults: Array<{ id: string; content: string; metadata: any; distance: number }> = [];
+    try {
+      keywordResults = await this.prisma.$queryRaw<
+        Array<{ id: string; content: string; metadata: any; distance: number }>
+      >`
+        SELECT id, content, metadata, (embedding <=> ${vectorString}::vector) as distance
+        FROM document_chunks,
+             to_tsquery('french', ${tsQueryString}) AS q
+        WHERE to_tsvector(
+          'french',
+          content || ' ' ||
+          coalesce(metadata->>'fileName', '') || ' ' ||
+          coalesce(metadata->>'title', '') || ' ' ||
+          coalesce(metadata->>'url', '')
+        ) @@ q
+        ORDER BY ts_rank(
+          to_tsvector(
+            'french',
+            content || ' ' ||
+            coalesce(metadata->>'fileName', '') || ' ' ||
+            coalesce(metadata->>'title', '') || ' ' ||
+            coalesce(metadata->>'url', '')
+          ),
+          q
+        ) DESC, distance ASC
+        LIMIT 6
+      `;
+    } catch {
+      keywordResults = [];
+    }
+
+    const merged = new Map<string, { content: string; metadata: any; distance: number }>();
+    for (const row of [...vectorResults, ...keywordResults]) {
+      const existing = merged.get(row.id);
+      if (!existing || row.distance < existing.distance) {
+        merged.set(row.id, {
+          content: row.content,
+          metadata: row.metadata,
+          distance: row.distance,
+        });
+      }
+    }
+
+    return [...merged.values()].sort((a, b) => a.distance - b.distance).slice(0, limit);
+  }
 }

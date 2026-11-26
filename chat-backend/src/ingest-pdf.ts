@@ -4,6 +4,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { VectorService } from './vector/vector.service.js';
 
+process.env.SKIP_AUTO_INGEST ??= 'true';
+
 const app = await NestFactory.createApplicationContext(AppModule);
 
 try {

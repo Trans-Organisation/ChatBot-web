@@ -39,7 +39,7 @@ export class ChatService {
       const languageName = language === 'en' ? 'English' : language === 'es' ? 'Spanish' : 'French';
       const officialUrls = (process.env.WEB_INGEST_URLS ?? '').split(',');
       const officialPages = await this.webScraper.searchOfficialUrls(officialUrls, content);
-      const relevantChunks = await this.vectorService.searchSimilarChunks(content, 8);
+      const relevantChunks = await this.vectorService.searchSimilarChunks(content, 12);
 
       const DISTANCE_THRESHOLD = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55);
       const validChunks = relevantChunks.filter((chunk) => chunk.distance <= DISTANCE_THRESHOLD);
