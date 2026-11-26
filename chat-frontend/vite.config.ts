@@ -1,17 +1,16 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vite.dev/config/
 export default defineConfig({
-  base: './',
   plugins: [react()],
+  base: '/ChatBot-web/',
   build: {
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/widget.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/widget.[ext]',
+        entryFileNames: 'widget.js',
+        chunkFileNames: 'widget-[name].js',
+        assetFileNames: 'widget.[ext]',
       },
     },
   },
-})
+});

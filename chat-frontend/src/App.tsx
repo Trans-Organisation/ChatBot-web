@@ -8,16 +8,53 @@ interface Message {
   content: string;
 }
 
-const QUICK_REPLIES = [
-  "Quel est le matériel obligatoire ?",
-  "Retrait des dossards : où et quand ?",
-  "Quelles sont les dates des épreuves ?",
-  "Quels sont les parcours proposés ?",
-  "Infos sur La Transju' Cyclo",
-  "Infos sur La Transju' Ski"
-];
+interface AppProps {
+  discipline?: string;
+}
 
-function App() {
+const QUICK_REPLIES_BY_DISCIPLINE: Record<string, string[]> = {
+  trail: [
+    "Quel est le matériel obligatoire en trail ?",
+    "Retrait des dossards Transju' Trails : où et quand ?",
+    "Quelles sont les barrières horaires du trail ?",
+    "Quels sont les parcours et dénivelés ?",
+  ],
+  cyclo: [
+    "Quels sont les parcours de La Transju' Cyclo ?",
+    "Retrait des dossards Cyclo : où et quand ?",
+    "Quelles sont les dates et horaires de départ ?",
+    "Quel équipement est obligatoire à vélo ?",
+  ],
+  nordique: [
+    "Quel est le matériel obligatoire en ski de fond ?",
+    "Retrait des dossards Transju' : où et quand ?",
+    "Quelles sont les distances en style classique et skating ?",
+    "Quelles sont les barrières horaires ?",
+  ],
+  jeunes: [
+    "Quelles sont les catégories d'âge pour La Transju' Jeunes ?",
+    "Horaires et lieu de départ Transju' Jeunes",
+    "Comment inscrire mon enfant ?",
+    "Quel matériel faut-il prévoir ?",
+  ],
+  general: [
+    "Quel est le matériel obligatoire ?",
+    "Retrait des dossards : où et quand ?",
+    "Quelles sont les dates des épreuves ?",
+    "Quels sont les parcours proposés ?",
+    "Infos sur La Transju' Cyclo",
+    "Infos sur La Transju' Ski",
+  ],
+};
+
+const DISCIPLINE_LABELS: Record<string, string> = {
+  trail: "La Transju' Trails",
+  cyclo: "La Transju' Cyclo",
+  nordique: "La Transju' (Ski de fond)",
+  jeunes: "La Transju' Jeunes",
+};
+
+function App({ discipline = 'general' }: AppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +62,10 @@ function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const normalizedDiscipline = discipline.toLowerCase();
+  const quickReplies = QUICK_REPLIES_BY_DISCIPLINE[normalizedDiscipline] || QUICK_REPLIES_BY_DISCIPLINE.general;
+  const disciplineLabel = DISCIPLINE_LABELS[normalizedDiscipline];
 
   useEffect(() => {
     let storedSessionId = localStorage.getItem('chat_session_id');
@@ -61,7 +102,11 @@ function App() {
       const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: trimmedMessage, sessionId }),
+        body: JSON.stringify({
+          content: trimmedMessage,
+          sessionId,
+          discipline: normalizedDiscipline,
+        }),
       });
 
       if (!response.ok) throw new Error('Erreur de communication avec le serveur');
@@ -90,19 +135,19 @@ function App() {
         <div className={`chat-container ${isExpanded ? 'expanded' : ''}`}>
           <header className="chat-header">
             <div className="chat-header-title">
-              <img 
-                src={transJuLogo} 
-                alt="Logo Transju" 
-                className="header-logo" 
+              <img
+                src={transJuLogo}
+                alt="Logo Transju"
+                className="header-logo"
                 onClick={startNewSession}
                 title="Recommencer une nouvelle conversation"
               />
               <h1>Assistant Transju</h1>
             </div>
             <div className="header-actions">
-              <button 
-                onClick={() => setIsExpanded(!isExpanded)} 
-                className="icon-btn" 
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="icon-btn"
                 title={isExpanded ? "Réduire la fenêtre" : "Agrandir la fenêtre"}
               >
                 {isExpanded ? (
@@ -133,7 +178,10 @@ function App() {
           <div className="chat-messages">
             {messages.length === 0 && (
               <div className="welcome-message">
-                <strong>Bienvenue sur l'Assistant La Transju' !</strong><br />
+                <strong>
+                  Bienvenue sur l'Assistant {disciplineLabel || "La Transju'"} !
+                </strong>
+                <br />
                 Posez vos questions ou choisissez une question fréquente ci-dessous.
               </div>
             )}
@@ -146,9 +194,8 @@ function App() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Bandeau déroulant horizontal au-dessus de la saisie */}
           <div className="quick-replies-bar">
-            {QUICK_REPLIES.map((question, index) => (
+            {quickReplies.map((question, index) => (
               <button
                 key={index}
                 onClick={() => sendPromptMessage(question)}
@@ -165,7 +212,11 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Posez votre question sur La Transju..."
+              placeholder={
+                disciplineLabel
+                  ? `Posez votre question sur ${disciplineLabel}...`
+                  : "Posez votre question sur La Transju..."
+              }
               className="chat-input"
             />
             <button type="submit" disabled={loading} className="chat-button">
