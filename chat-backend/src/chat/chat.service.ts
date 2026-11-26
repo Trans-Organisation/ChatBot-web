@@ -42,7 +42,9 @@ export class ChatService {
       const relevantChunks = await this.vectorService.searchSimilarChunks(content, 12);
 
       const DISTANCE_THRESHOLD = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55);
-      const validChunks = relevantChunks.filter((chunk) => chunk.distance <= DISTANCE_THRESHOLD);
+      const validChunks = relevantChunks.filter(
+        (chunk) => chunk.distance <= DISTANCE_THRESHOLD || (chunk.fromKeyword && chunk.distance <= 0.72),
+      );
       
       console.log(`[RAG Debug] Chunks trouvés:`, relevantChunks.map(c => ({
         distance: c.distance,
@@ -85,7 +87,8 @@ Réponds entièrement dans cette langue, même si le contexte ou l'historique es
 N'utilise jamais le français si LANGUE DE RÉPONSE vaut English ou Spanish.
 Réponds de façon directe et utile, sans traduire les noms propres, URLs, devises ou nombres.
 Tu dois répondre uniquement à partir du contexte officiel fourni dans le dernier message utilisateur.
-Fais particulièrement attention au nom du document source (ex. Marathon, Trail, Transjurassienne) : n'applique jamais la règle d'une épreuve à une autre épreuve. Si plusieurs épreuves ont des règles différentes, précise-le clairement.
+Fais particulièrement attention au nom du document source (ex. Marathon, Trail, Transjurassienne) : n'applique jamais la règle d'une épreuve à une autre épreuve.
+En particulier, ne confonds jamais le Marathon Franco-Suisse (Reglement-Marathon-Franco-Suisse.pdf) avec le parcours 42 km de La Transju' Trail (Reglement-Trail-2027.pdf). Si la question porte sur « le Marathon », appuie-toi en priorité sur Reglement-Marathon-Franco-Suisse.pdf (et précise la différence avec le Trail 42 km si les deux apparaissent dans le contexte).
 Si l'information demandée n'est pas présente ou complète dans le contexte, réponds dans la langue de la question avec l'équivalent de :
 "Désolé, je ne trouve pas cette information dans les documents officiels. Pour toute question, n'hésitez pas à contacter l'organisation par e-mail à : contact@latransju.com"
 Ne renvoie pas la réponse de secours si le contexte contient la réponse, même si elle se trouve dans un tableau ou une liste.`,

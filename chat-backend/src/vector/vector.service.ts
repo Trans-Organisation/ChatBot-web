@@ -271,7 +271,7 @@ export class VectorService implements OnModuleInit {
   async searchSimilarChunks(
     query: string,
     limit = 12,
-  ): Promise<Array<{ content: string; metadata: any; distance: number }>> {
+  ): Promise<Array<{ content: string; metadata: any; distance: number; fromKeyword?: boolean }>> {
     const queryEmbedding = await this.generateEmbedding(query);
     const vectorString = `[${queryEmbedding.join(',')}]`;
 
@@ -286,13 +286,18 @@ export class VectorService implements OnModuleInit {
 
     // Recherche lexicale complémentaire (hybride) pour garantir la remontée des documents
     // mentionnant explicitement l'épreuve ou les mots-clés de la question
+    const stopWords = new Set([
+      'avec', 'cette', 'dans', 'elle', 'elles', 'entre', 'etre', 'faire', 'faut',
+      'mais', 'nous', 'plus', 'pour', 'quel', 'quelle', 'quelles', 'quels',
+      'sans', 'sont', 'sous', 'tout', 'tous', 'toute', 'toutes', 'vous',
+    ]);
     const keywords = [
       ...new Set(
         query
           .toLocaleLowerCase('fr-FR')
           .replace(/[^\p{L}\p{N}\s]/gu, ' ')
           .split(/\s+/)
-          .filter((term) => term.length >= 4),
+          .filter((term) => term.length >= 4 && !stopWords.has(term)),
       ),
     ].slice(0, 8);
 
@@ -330,21 +335,34 @@ export class VectorService implements OnModuleInit {
           ),
           q
         ) DESC, distance ASC
-        LIMIT 6
+        LIMIT 8
       `;
     } catch {
       keywordResults = [];
     }
 
-    const merged = new Map<string, { content: string; metadata: any; distance: number }>();
-    for (const row of [...vectorResults, ...keywordResults]) {
+    const merged = new Map<
+      string,
+      { content: string; metadata: any; distance: number; fromKeyword?: boolean }
+    >();
+    for (const row of vectorResults) {
+      merged.set(row.id, {
+        content: row.content,
+        metadata: row.metadata,
+        distance: row.distance,
+      });
+    }
+    for (const row of keywordResults) {
       const existing = merged.get(row.id);
       if (!existing || row.distance < existing.distance) {
         merged.set(row.id, {
           content: row.content,
           metadata: row.metadata,
           distance: row.distance,
+          fromKeyword: true,
         });
+      } else {
+        existing.fromKeyword = true;
       }
     }
 
