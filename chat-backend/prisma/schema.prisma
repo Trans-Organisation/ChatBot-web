@@ -18,11 +18,13 @@ model Message {
 }
 
 model DocumentChunk {
-  id        String                 @id @default(uuid())
-  content   String                                          // Le texte de l'extrait
-  metadata  Json?                                           // Titre du doc, numéro de page, etc.
-  embedding Unsupported("vector(1024)")?                    // Vecteur Mistral (1024 dims)
-  createdAt DateTime               @default(now())
+  id         String                 @id @default(uuid())
+  content    String                                          // Le texte de l'extrait
+  metadata   Json?                                           // Titre du doc, numéro de page, etc.
+  discipline String                 @default("general")      // Discipline / section (trail, cyclo, nordique, jeunes, general)
+  embedding  Unsupported("vector(1024)")?                    // Vecteur Mistral (1024 dims)
+  createdAt  DateTime               @default(now())
 
+  @@index([discipline])
   @@map("document_chunks")
 }

@@ -1,5 +1,11 @@
 import { Inject, Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  Discipline,
+  FILTERABLE_DISCIPLINES,
+  normalizeDiscipline,
+  resolveDiscipline,
+} from '../ingestion/discipline.util.js';
 import { Mistral } from '@mistralai/mistralai';
 import fs from 'fs';
 import path from 'path';
@@ -87,12 +93,14 @@ export class VectorService implements OnModuleInit {
   async ingestPdfFile(filePath: string, method = 'pdf-parse'): Promise<number> {
     const fileName = path.basename(filePath);
     const relativePath = path.relative(process.cwd(), filePath);
+    const discipline = resolveDiscipline(relativePath || fileName);
     const docPrefix = `[Document : ${fileName}]`;
     const existing = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*) as count
       FROM document_chunks
       WHERE (metadata->>'filePath' = ${relativePath} OR metadata->>'source' = ${fileName})
         AND content LIKE ${`${docPrefix}%`}
+        AND discipline = ${discipline}
     `;
 
     if (Number(existing[0]?.count ?? 0) > 0) {
@@ -100,14 +108,14 @@ export class VectorService implements OnModuleInit {
       return 0;
     }
 
-    // Supprime d'éventuels anciens chunks sans préfixe [Document : ...] avant ré-indexation
+    // Supprime d'éventuels anciens chunks avant ré-indexation
     await this.prisma.$executeRaw`
       DELETE FROM document_chunks
       WHERE metadata->>'filePath' = ${relativePath}
          OR metadata->>'source' = ${fileName}
     `;
 
-    this.logger.log(`📄 Début de l'ingestion : ${filePath}`);
+    this.logger.log(`📄 Début de l'ingestion : ${filePath} (discipline: ${discipline})`);
     const dataBuffer = fs.readFileSync(filePath);
     const pdfData = await pdf(dataBuffer);
 
@@ -120,14 +128,19 @@ export class VectorService implements OnModuleInit {
 
     for (let i = 0; i < chunks.length; i++) {
       const enrichedChunk = `[Document : ${fileName}]\n${chunks[i]}`;
-      await this.addDocumentChunk(enrichedChunk, {
-        source: 'pdf',
-        fileName,
-        filePath: relativePath,
-        method,
-        part: i + 1,
-        totalParts: chunks.length,
-      });
+      await this.addDocumentChunk(
+        enrichedChunk,
+        {
+          source: 'pdf',
+          fileName,
+          filePath: relativePath,
+          discipline,
+          method,
+          part: i + 1,
+          totalParts: chunks.length,
+        },
+        discipline,
+      );
     }
 
     this.logger.log(`🎉 '${fileName}' indexé (${chunks.length} chunks).`);
@@ -171,14 +184,18 @@ export class VectorService implements OnModuleInit {
     return embedding;
   }
 
-  async addDocumentChunk(content: string, metadata: Record<string, any> = {}) {
+  async addDocumentChunk(
+    content: string,
+    metadata: Record<string, any> = {},
+    discipline: Discipline = 'general',
+  ) {
     const embedding = await this.generateEmbedding(content);
     const vectorString = `[${embedding.join(',')}]`;
 
     // Exécution de la requête SQL vectorielle
     await this.prisma.$executeRaw`
-      INSERT INTO document_chunks (id, content, metadata, embedding, "createdAt")
-      VALUES (gen_random_uuid(), ${content}, ${JSON.stringify(metadata)}::jsonb, ${vectorString}::vector, NOW())
+      INSERT INTO document_chunks (id, content, metadata, discipline, embedding, "createdAt")
+      VALUES (gen_random_uuid(), ${content}, ${JSON.stringify(metadata)}::jsonb, ${discipline}, ${vectorString}::vector, NOW())
     `;
   }
 
@@ -217,14 +234,27 @@ export class VectorService implements OnModuleInit {
     return Number(deleted[0]?.count ?? 0);
   }
 
-  async hasWebSourceHash(url: string, contentHash: string): Promise<boolean> {
-    const existing = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*) as count
-      FROM document_chunks
-      WHERE metadata->>'source' = 'web'
-        AND metadata->>'url' = ${url}
-        AND metadata->>'contentHash' = ${contentHash}
-    `;
+  async hasWebSourceHash(
+    url: string,
+    contentHash: string,
+    discipline?: Discipline,
+  ): Promise<boolean> {
+    const existing = discipline
+      ? await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*) as count
+          FROM document_chunks
+          WHERE metadata->>'source' = 'web'
+            AND metadata->>'url' = ${url}
+            AND metadata->>'contentHash' = ${contentHash}
+            AND discipline = ${discipline}
+        `
+      : await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*) as count
+          FROM document_chunks
+          WHERE metadata->>'source' = 'web'
+            AND metadata->>'url' = ${url}
+            AND metadata->>'contentHash' = ${contentHash}
+        `;
     return Number(existing[0]?.count ?? 0) > 0;
   }
 
@@ -232,6 +262,7 @@ export class VectorService implements OnModuleInit {
     url: string,
     chunks: string[],
     metadata: Record<string, any>,
+    discipline: Discipline = 'general',
   ): Promise<void> {
     const embeddedChunks: Array<{
       content: string;
@@ -255,11 +286,12 @@ export class VectorService implements OnModuleInit {
       for (const chunk of embeddedChunks) {
         const vectorString = `[${chunk.embedding.join(',')}]`;
         await transaction.$executeRaw`
-          INSERT INTO document_chunks (id, content, metadata, embedding, "createdAt")
+          INSERT INTO document_chunks (id, content, metadata, discipline, embedding, "createdAt")
           VALUES (
             gen_random_uuid(),
             ${chunk.content},
             ${JSON.stringify(chunk.metadata)}::jsonb,
+            ${discipline},
             ${vectorString}::vector,
             NOW()
           )
@@ -271,18 +303,91 @@ export class VectorService implements OnModuleInit {
   async searchSimilarChunks(
     query: string,
     limit = 12,
-  ): Promise<Array<{ content: string; metadata: any; distance: number; fromKeyword?: boolean }>> {
+    disciplineInput?: string,
+    distanceThreshold = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55),
+  ): Promise<
+    Array<{
+      content: string;
+      metadata: any;
+      discipline: string;
+      distance: number;
+      fromKeyword?: boolean;
+    }>
+  > {
     const queryEmbedding = await this.generateEmbedding(query);
     const vectorString = `[${queryEmbedding.join(',')}]`;
+    const discipline = normalizeDiscipline(disciplineInput);
 
-    const vectorResults = await this.prisma.$queryRaw<
-      Array<{ id: string; content: string; metadata: any; distance: number }>
-    >`
-      SELECT id, content, metadata, (embedding <=> ${vectorString}::vector) as distance
-      FROM document_chunks
-      ORDER BY distance ASC
-      LIMIT ${limit}
-    `;
+    if (FILTERABLE_DISCIPLINES.has(discipline)) {
+      const filteredResults = await this.executeHybridSearch(
+        query,
+        vectorString,
+        limit,
+        discipline,
+      );
+      const pertinentCount = filteredResults.filter(
+        (chunk) =>
+          chunk.distance <= distanceThreshold ||
+          (chunk.fromKeyword && chunk.distance <= 0.72),
+      ).length;
+      const bestDistance = filteredResults[0]?.distance ?? 1;
+
+      if (pertinentCount >= 2 && bestDistance <= distanceThreshold) {
+        return filteredResults;
+      }
+
+      this.logger.log(
+        `🔄 Fallback RAG global (discipline=${discipline}, pertinentCount=${pertinentCount}, bestDistance=${bestDistance.toFixed(3)})`,
+      );
+    }
+
+    return this.executeHybridSearch(query, vectorString, limit);
+  }
+
+  private async executeHybridSearch(
+    query: string,
+    vectorString: string,
+    limit: number,
+    filterDiscipline?: Discipline,
+  ): Promise<
+    Array<{
+      content: string;
+      metadata: any;
+      discipline: string;
+      distance: number;
+      fromKeyword?: boolean;
+    }>
+  > {
+    const vectorResults = filterDiscipline
+      ? await this.prisma.$queryRaw<
+          Array<{
+            id: string;
+            content: string;
+            metadata: any;
+            discipline: string;
+            distance: number;
+          }>
+        >`
+          SELECT id, content, metadata, discipline, (embedding <=> ${vectorString}::vector) as distance
+          FROM document_chunks
+          WHERE discipline IN (${filterDiscipline}, 'general')
+          ORDER BY distance ASC
+          LIMIT ${limit}
+        `
+      : await this.prisma.$queryRaw<
+          Array<{
+            id: string;
+            content: string;
+            metadata: any;
+            discipline: string;
+            distance: number;
+          }>
+        >`
+          SELECT id, content, metadata, discipline, (embedding <=> ${vectorString}::vector) as distance
+          FROM document_chunks
+          ORDER BY distance ASC
+          LIMIT ${limit}
+        `;
 
     // Recherche lexicale complémentaire (hybride) pour garantir la remontée des documents
     // mentionnant explicitement l'épreuve ou les mots-clés de la question
@@ -305,9 +410,10 @@ export class VectorService implements OnModuleInit {
     ].slice(0, 8);
 
     if (keywords.length === 0) {
-      return vectorResults.map(({ content, metadata, distance }) => ({
+      return vectorResults.map(({ content, metadata, discipline, distance }) => ({
         content,
         metadata,
+        discipline,
         distance,
       }));
     }
@@ -315,57 +421,121 @@ export class VectorService implements OnModuleInit {
     // Préfixe `:*` sur dictionnaire `simple` + suppression des accents via `translate`
     // pour que "batons" matche "Bâtons" et "materiel" matche "Matériel"
     const tsQueryString = keywords.map((term) => `${term}:*`).join(' | ');
-    let keywordResults: Array<{ id: string; content: string; metadata: any; distance: number }> = [];
+    let keywordResults: Array<{
+      id: string;
+      content: string;
+      metadata: any;
+      discipline: string;
+      distance: number;
+    }> = [];
     try {
-      keywordResults = await this.prisma.$queryRaw<
-        Array<{ id: string; content: string; metadata: any; distance: number }>
-      >`
-        SELECT id, content, metadata, (embedding <=> ${vectorString}::vector) as distance
-        FROM document_chunks,
-             to_tsquery('simple', ${tsQueryString}) AS q
-        WHERE to_tsvector(
-          'simple',
-          translate(
-            lower(
-              content || ' ' ||
-              coalesce(metadata->>'fileName', '') || ' ' ||
-              coalesce(metadata->>'title', '') || ' ' ||
-              coalesce(metadata->>'url', '')
-            ),
-            'àâäéèêëîïôöùûüÿç',
-            'aaaeeeeiioouuuyc'
-          )
-        ) @@ q
-        ORDER BY ts_rank(
-          to_tsvector(
-            'simple',
-            translate(
-              lower(
-                content || ' ' ||
-                coalesce(metadata->>'fileName', '') || ' ' ||
-                coalesce(metadata->>'title', '') || ' ' ||
-                coalesce(metadata->>'url', '')
+      keywordResults = filterDiscipline
+        ? await this.prisma.$queryRaw<
+            Array<{
+              id: string;
+              content: string;
+              metadata: any;
+              discipline: string;
+              distance: number;
+            }>
+          >`
+            SELECT id, content, metadata, discipline, (embedding <=> ${vectorString}::vector) as distance
+            FROM document_chunks,
+                 to_tsquery('simple', ${tsQueryString}) AS q
+            WHERE discipline IN (${filterDiscipline}, 'general')
+              AND to_tsvector(
+                'simple',
+                translate(
+                  lower(
+                    content || ' ' ||
+                    coalesce(metadata->>'fileName', '') || ' ' ||
+                    coalesce(metadata->>'title', '') || ' ' ||
+                    coalesce(metadata->>'url', '')
+                  ),
+                  'àâäéèêëîïôöùûüÿç',
+                  'aaaeeeeiioouuuyc'
+                )
+              ) @@ q
+            ORDER BY ts_rank(
+              to_tsvector(
+                'simple',
+                translate(
+                  lower(
+                    content || ' ' ||
+                    coalesce(metadata->>'fileName', '') || ' ' ||
+                    coalesce(metadata->>'title', '') || ' ' ||
+                    coalesce(metadata->>'url', '')
+                  ),
+                  'àâäéèêëîïôöùûüÿç',
+                  'aaaeeeeiioouuuyc'
+                )
               ),
-              'àâäéèêëîïôöùûüÿç',
-              'aaaeeeeiioouuuyc'
-            )
-          ),
-          q
-        ) DESC, distance ASC
-        LIMIT 8
-      `;
+              q
+            ) DESC, distance ASC
+            LIMIT 8
+          `
+        : await this.prisma.$queryRaw<
+            Array<{
+              id: string;
+              content: string;
+              metadata: any;
+              discipline: string;
+              distance: number;
+            }>
+          >`
+            SELECT id, content, metadata, discipline, (embedding <=> ${vectorString}::vector) as distance
+            FROM document_chunks,
+                 to_tsquery('simple', ${tsQueryString}) AS q
+            WHERE to_tsvector(
+              'simple',
+              translate(
+                lower(
+                  content || ' ' ||
+                  coalesce(metadata->>'fileName', '') || ' ' ||
+                  coalesce(metadata->>'title', '') || ' ' ||
+                  coalesce(metadata->>'url', '')
+                ),
+                'àâäéèêëîïôöùûüÿç',
+                'aaaeeeeiioouuuyc'
+              )
+            ) @@ q
+            ORDER BY ts_rank(
+              to_tsvector(
+                'simple',
+                translate(
+                  lower(
+                    content || ' ' ||
+                    coalesce(metadata->>'fileName', '') || ' ' ||
+                    coalesce(metadata->>'title', '') || ' ' ||
+                    coalesce(metadata->>'url', '')
+                  ),
+                  'àâäéèêëîïôöùûüÿç',
+                  'aaaeeeeiioouuuyc'
+                )
+              ),
+              q
+            ) DESC, distance ASC
+            LIMIT 8
+          `;
     } catch {
       keywordResults = [];
     }
 
     const merged = new Map<
       string,
-      { content: string; metadata: any; distance: number; fromKeyword?: boolean }
+      {
+        content: string;
+        metadata: any;
+        discipline: string;
+        distance: number;
+        fromKeyword?: boolean;
+      }
     >();
     for (const row of vectorResults) {
       merged.set(row.id, {
         content: row.content,
         metadata: row.metadata,
+        discipline: row.discipline,
         distance: row.distance,
       });
     }
@@ -375,6 +545,7 @@ export class VectorService implements OnModuleInit {
         merged.set(row.id, {
           content: row.content,
           metadata: row.metadata,
+          discipline: row.discipline,
           distance: row.distance,
           fromKeyword: true,
         });

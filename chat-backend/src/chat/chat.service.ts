@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VectorService } from '../vector/vector.service.js';
 import { WebScraperService } from '../ingestion/web-scraper.service.js';
+import { DISCIPLINE_LABELS, normalizeDiscipline } from '../ingestion/discipline.util.js';
 import { Mistral } from '@mistralai/mistralai';
 
 @Injectable()
@@ -23,7 +24,10 @@ export class ChatService {
     });
   }
 
-  async handleMessage(sessionId: string, content: string) {
+  async handleMessage(sessionId: string, content: string, disciplineInput?: string) {
+    const discipline = normalizeDiscipline(disciplineInput);
+    const sectionLabel = DISCIPLINE_LABELS[discipline];
+
     await this.prisma.message.create({
       data: {
         content,
@@ -55,13 +59,18 @@ export class ChatService {
       const ragQuery =
         !mentionsRace && lastUserMessage ? `${lastUserMessage} ${content}` : content;
 
+      const DISTANCE_THRESHOLD = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55);
       const language = this.detectLanguage(content);
       const languageName = language === 'en' ? 'English' : language === 'es' ? 'Spanish' : 'French';
       const officialUrls = (process.env.WEB_INGEST_URLS ?? '').split(',');
       const officialPages = await this.webScraper.searchOfficialUrls(officialUrls, ragQuery);
-      const relevantChunks = await this.vectorService.searchSimilarChunks(ragQuery, 12);
+      const relevantChunks = await this.vectorService.searchSimilarChunks(
+        ragQuery,
+        12,
+        discipline,
+        DISTANCE_THRESHOLD,
+      );
 
-      const DISTANCE_THRESHOLD = Number(process.env.RAG_DISTANCE_THRESHOLD ?? 0.55);
       const validChunks = relevantChunks.filter(
         (chunk) => chunk.distance <= DISTANCE_THRESHOLD || (chunk.fromKeyword && chunk.distance <= 0.72),
       );
@@ -99,9 +108,17 @@ export class ChatService {
           .join('\n---\n');
         const contextText = [liveContext, vectorContext].filter(Boolean).join('\n---\n');
 
+      const disciplineInstruction =
+        discipline === 'general'
+          ? `L'utilisateur consulte actuellement le portail général de La Transju' (aucune épreuve spécifique sélectionnée).
+Ne mélange jamais les règlements entre les différentes épreuves. Si la question porte sur un sujet qui dépend de l'épreuve (matériel obligatoire, dates, dossards, barrières horaires, tarifs) sans que l'épreuve soit précisée, demande-lui de préciser son épreuve (La Transju' Trails, La Transju' Cyclo, La Transju' ski de fond ou La Transju' Jeunes).`
+          : `L'utilisateur consulte actuellement la section ${sectionLabel}.
+Priorise les informations de cet événement (${sectionLabel}) en cas de question ambiguë (matériel obligatoire, dates, dossards, barrières horaires, tarifs), et ne mélange jamais les règlements entre les différentes épreuves.`;
+
       const systemPrompt = {
         role: 'system' as const,
         content: `Tu es l'assistant officiel de l'événement sportif La Transju'.
+${disciplineInstruction}
 LANGUE DE RÉPONSE OBLIGATOIRE : ${languageName}.
 Réponds entièrement dans cette langue, même si le contexte ou l'historique est dans une autre langue.
 N'utilise jamais le français si LANGUE DE RÉPONSE vaut English ou Spanish.

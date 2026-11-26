@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { VectorService } from '../vector/vector.service.js';
+import { resolveDiscipline } from './discipline.util.js';
 import { splitTextIntoChunks } from './text-chunker.js';
 import { WebScraperService } from './web-scraper.service.js';
 
@@ -95,28 +96,35 @@ export class WebIngestionService implements OnModuleInit {
   async ingestUrl(url: string): Promise<WebIngestionResult> {
     const page = await this.scraper.scrapeUrl(url);
     const contentHash = createHash('sha256').update(page.content).digest('hex');
+    const discipline = resolveDiscipline(url);
     const chunks = splitTextIntoChunks(page.content);
     const metadata = {
       source: 'web',
       method: 'cheerio',
       url: page.url,
       title: page.title,
+      discipline,
       contentHash,
       ingestedAt: new Date().toISOString(),
     };
 
-    const unchanged = await this.vectorService.hasWebSourceHash(url, contentHash);
+    const unchanged = await this.vectorService.hasWebSourceHash(url, contentHash, discipline);
     if (unchanged) {
       this.logger.log(`Page inchangée, ingestion ignorée : ${url}`);
       return { url, status: 'unchanged', chunks: 0 };
     }
 
-    await this.vectorService.replaceWebSource(url, chunks, {
-      ...metadata,
-      part: 0,
-      totalParts: chunks.length,
-    });
-    this.logger.log(`${chunks.length} chunks insérés pour ${url}`);
+    await this.vectorService.replaceWebSource(
+      url,
+      chunks,
+      {
+        ...metadata,
+        part: 0,
+        totalParts: chunks.length,
+      },
+      discipline,
+    );
+    this.logger.log(`${chunks.length} chunks insérés pour ${url} (discipline: ${discipline})`);
     return { url, status: 'inserted', chunks: chunks.length };
   }
 
