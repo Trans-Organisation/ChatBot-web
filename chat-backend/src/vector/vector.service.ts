@@ -111,7 +111,8 @@ export class VectorService implements OnModuleInit {
     this.logger.log(`✂️ ${chunks.length} chunks générés pour '${fileName}'.`);
 
     for (let i = 0; i < chunks.length; i++) {
-      await this.addDocumentChunk(chunks[i], {
+      const enrichedChunk = `[Document : ${fileName}]\n${chunks[i]}`;
+      await this.addDocumentChunk(enrichedChunk, {
         source: 'pdf',
         fileName,
         filePath: relativePath,
